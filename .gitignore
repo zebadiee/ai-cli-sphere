@@ -1,0 +1,7 @@
+# .gitignore (better version than the default):
+build/
+dist/
+venv/
+configs/infra/secrets.json
+# Keep specific workflow files
+!.github/workflows/*.yml
