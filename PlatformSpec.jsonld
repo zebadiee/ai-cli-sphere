@@ -1,0 +1,18 @@
+{
+  "apiVersion": "platformspec/v1",
+  "kind": "PlatformSpec",
+  "metadata": {
+    "name": "ai-token-manager"
+  },
+  "spec": {
+    "integration": {
+      "git": {
+        "url": "https://github.com/zebadiee/ai-cli-sphere",
+        "branch": "main",
+        "deploymentHooks": [
+          "devops/github-actions/deploy.yml"
+        ]
+      }
+    }
+  }
+}
