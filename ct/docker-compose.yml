@@ -7,6 +7,12 @@ services:
     ports:
       - "8000:8080"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8080/health'); sys.exit(0 if r.getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
 
   orchestrator:
     build: ./ct-dev/orchestrator
@@ -14,13 +20,31 @@ services:
     ports:
       - "9001:9001"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:9001/health'); sys.exit(0 if r.getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
 
   observer:
     build: ./ct-dev/observer
     container_name: ct-observer
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:9002/health'); sys.exit(0 if r.getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
 
   mock-tool:
     build: ./ct-dev/mock-tool
     container_name: ct-mock-tool
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:9000/health'); sys.exit(0 if r.getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s

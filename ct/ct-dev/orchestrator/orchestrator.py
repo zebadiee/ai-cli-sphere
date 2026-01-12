@@ -2218,6 +2218,11 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                 }
             self._send_json_response(200, response)
         
+        elif self.path == "/health":
+            # Lightweight health endpoint for Docker healthchecks
+            response = {"status": "ok", "halted": HALTED, "current_plan_id": CURRENT_PLAN.get("plan_id") if CURRENT_PLAN else None}
+            self._send_json_response(200, response)
+
         else:
             self.send_response(404)
             self.end_headers()
