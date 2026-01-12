@@ -5,7 +5,7 @@ services:
     build: ./ct-dev/gateway
     container_name: ct-gateway
     ports:
-      - "8000:8000"
+      - "8000:8080"
     restart: unless-stopped
 
   orchestrator:
