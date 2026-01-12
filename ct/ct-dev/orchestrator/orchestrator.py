@@ -45,6 +45,58 @@ except Exception as e:
 # Memory v1 state
 CALIBRATION = {}
 
+def prune_plans_by_policy(plan_set, policy):
+    """Filter plans against policy safety rules and confidence thresholds.
+    
+    Returns: (approved_plans, rejected_plans_with_reasons)
+    """
+    if not plan_set or not plan_set.get("plans"):
+        return [], []
+    
+    approved = []
+    rejections = []
+    
+    # Extract pruning config from policy
+    pruning_config = policy.get("pruning_config", {})
+    min_confidence = pruning_config.get("min_plan_confidence", 0.75)
+    sandbox_only_actions = policy.get("plan_safety_rules", {}).get("sandbox_only_actions", [])
+    forbidden_actions = policy.get("plan_safety_rules", {}).get("forbidden_actions", [])
+    
+    for plan in plan_set.get("plans", []):
+        violations = []
+        
+        # Check plan-level confidence
+        plan_confidence = plan.get("confidence", 1.0)
+        if plan_confidence < min_confidence:
+            violations.append(f"plan confidence {plan_confidence:.2f} below threshold {min_confidence}")
+        
+        # Check steps for policy violations
+        for step in plan.get("steps", []):
+            action = step.get("action", "")
+            
+            # Check for forbidden actions
+            if action in forbidden_actions:
+                violations.append(f"action '{action}' is forbidden by policy")
+            
+            # Check sandbox-only actions
+            if action in sandbox_only_actions:
+                target = step.get("target", "")
+                if target and not target.startswith("/tmp/ct-sandbox/"):
+                    violations.append(f"action '{action}' only allowed in sandbox, target is {target}")
+        
+        if violations:
+            rejections.append({
+                "plan_id": plan.get("plan_id"),
+                "status": "rejected",
+                "reasons": violations
+            })
+            print(f"[POLICY PRUNING] Plan {plan.get('plan_id')} rejected: {violations}")
+        else:
+            approved.append(plan)
+            print(f"[POLICY PRUNING] Plan {plan.get('plan_id')} approved")
+    
+    return approved, rejections
+
 SYSTEM_PROMPT_TEMPLATE = """You are CT's reasoning core.
 
 {plan_context_block}
@@ -518,12 +570,46 @@ def generate_execution_plan_set(artifact):
                 plan_set = json.loads(response.json().get("response"))
                 print(f"[ORCHESTRATOR] Multi-plan set produced with {len(plan_set.get('plans', []))} alternatives.")
                 emit_event(plan_set)
+                
+                # Phase 10.1: Policy-Driven Plan Pruning
+                print("[ORCHESTRATOR] Applying policy-driven plan pruning...")
+                approved_plans, rejected_plans = prune_plans_by_policy(plan_set, POLICY)
+                
+                # Emit pruning results
+                pruning_event = {
+                    "type": "plan_pruning_result",
+                    "accepted_plan_ids": [p.get("plan_id") for p in approved_plans],
+                    "rejected": rejected_plans,
+                    "total_before": len(plan_set.get("plans", [])),
+                    "total_after": len(approved_plans)
+                }
+                emit_event(pruning_event)
+                print(f"[ORCHESTRATOR] Plan pruning: {len(approved_plans)} approved, {len(rejected_plans)} rejected")
+                
+                # If no plans survive pruning, block with explanation
+                if not approved_plans:
+                    print("[ORCHESTRATOR] No plans survived policy pruning")
+                    blocked_review = generate_blocked_review(
+                        reason="policy_pruning_no_survivors",
+                        details={
+                            "rejected_plans": rejected_plans,
+                            "context": "All proposed plans violated policy constraints"
+                        }
+                    )
+                    if blocked_review:
+                        emit_event(blocked_review)
+                    print("[ORCHESTRATOR] Entering HALT state.")
+                    HALTED = True
+                    return None
+                
+                # Update plan set with approved plans only
+                plan_set["plans"] = approved_plans
                 LAST_PLAN_SET = plan_set
                 APPROVED_PLAN_ID = None
                 
-                # Generate review for the multi-plan set
+                # Generate review for the multi-plan set (now with pruning info)
                 print("[ORCHESTRATOR] Generating review for multi-plan set...")
-                review_artifact = generate_multiplan_review_artifact(plan_set)
+                review_artifact = generate_multiplan_review_artifact(plan_set, rejected_plans)
                 if review_artifact:
                     emit_event(review_artifact)
                     print("[ORCHESTRATOR] Multi-plan review artifact emitted.")
@@ -581,13 +667,21 @@ def generate_review_artifact(execution_plan):
     
     return None
 
-def generate_multiplan_review_artifact(plan_set):
-    """Generate a human-readable review for a multi-plan set."""
+def generate_multiplan_review_artifact(plan_set, rejected_plans=None):
+    """Generate a human-readable review for a multi-plan set, including pruning info."""
+    if rejected_plans is None:
+        rejected_plans = []
+    
+    rejected_info = ""
+    if rejected_plans:
+        rejected_info = f"\n\nREJECTED PLANS (removed by policy pruning):\n{json.dumps(rejected_plans, indent=2)}"
+    
     prompt = f"""You are CT's review assistant for multi-plan scenarios.
 Your task is to explain the alternative plans in plain English.
 
-MULTI-PLAN SET:
+MULTI-PLAN SET (Approved):
 {json.dumps(plan_set, indent=2)}
+{rejected_info}
 
 Output ONLY valid JSON in this format:
 {{
@@ -607,6 +701,12 @@ Output ONLY valid JSON in this format:
       "when_avoid": "..."
     }}
   ],
+  "removed_plans": [
+    {{
+      "plan_id": "C",
+      "reason": "Plain English explanation of why this plan was removed (policy violation or confidence threshold)"
+    }}
+  ],
   "recommendation": "Why CT recommends {{recommended_id}}: {{reasoning}} (2-3 sentences)",
   "confidence": 0.0-1.0
 }}
@@ -615,6 +715,7 @@ Guidelines:
 - Be clear and direct for human decision-making
 - Focus on practical tradeoffs
 - Highlight irreversible or high-risk operations
+- Explain why rejected plans were filtered (transparency, not censorship)
 - Do not apologize or be overly verbose
 - Output JSON only. No preamble or explanation.
 """

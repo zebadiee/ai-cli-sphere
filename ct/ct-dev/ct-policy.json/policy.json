@@ -1,0 +1,18 @@
+{
+  "global_policies": [
+    {
+      "id": "planning_allowed",
+      "rule": "Planning is allowed in all modes",
+      "severity": "soft"
+    }
+  ],
+  "pruning_config": {
+    "min_plan_confidence": 0.75,
+    "allow_write": false,
+    "require_stepwise_approval": true
+  },
+  "plan_safety_rules": {
+    "forbidden_actions": [],
+    "sandbox_only_actions": ["apply_patch"]
+  }
+}
