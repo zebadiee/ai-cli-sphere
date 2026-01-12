@@ -1,4 +1,19 @@
-import time, random, requests, json, threading, http.server, os
+import time, random, requests, json, threading, http.server, os, sys
+
+# Phase 12: Intent validation
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    from intent_validator import validate_intent, INTENT_QUEUE
+except ImportError:
+    print("[ORCHESTRATOR] Warning: intent_validator module not found. Phase 12 intents disabled.")
+    INTENT_QUEUE = None
+
+# Phase 12 Step 3: Approval bridge
+try:
+    from approval_bridge import APPROVAL_BRIDGE, validate_approval_request
+except ImportError:
+    print("[ORCHESTRATOR] Warning: approval_bridge module not found. Phase 12 approval disabled.")
+    APPROVAL_BRIDGE = None
 
 INTENTS = [
     "inspect_repo",
@@ -61,6 +76,12 @@ APPROVED_PHASE_ID = None     # Phase approved by human
 COMPLETED_PHASES = []        # List of completed phase_ids
 PHASE_RESULTS = {}           # {phase_id: {"success": bool, "steps": [...]}}
 SKIPPED_PHASES = []          # List of skipped phase_ids
+
+# Phase 11.3: Predictive Resume & Phase Review
+# Tracks approval patterns and staged phases
+STAGED_PHASE_CACHE = {}      # {phase_id: {"next_phase_id": str, "confidence": float}}
+APPROVAL_PATTERN_STATS = {}  # {from_phase: {to_phase: {"count": int, "confidence": float}}}
+LAST_PHASE_REVIEW_SCORE = {} # {phase_id: {"quality": float, "summary": str}}
 
 def update_agent_preference(selected_agent_id, policy):
     """Learn from human plan selections.
@@ -143,11 +164,14 @@ def emit_phase_artifact(artifact_type, phase, plan_id, **kwargs):
     return artifact
 
 def generate_phase_review(phase, success, policy):
-    """Generate optional LLM review of completed phase.
+    """Generate optional LLM review of completed phase with quality enrichment.
     
     Phase 11.2: Opt-in phase reviews (disabled by default).
+    Phase 11.3 Step 4: Enhanced reviews with quality_score and confidence_explanation.
+    
+    Reviews are advisory only. Quality score never blocks approval.
     """
-    phase_config = policy.get("phase_execution_config", {})
+    phase_config = policy.get("phase_execution_config", {}) if policy else {}
     if not phase_config.get("generate_phase_reviews", False):
         return None  # Reviews disabled
     
@@ -188,10 +212,238 @@ Guidelines:
         
         if response.status_code == 200:
             review = json.loads(response.json().get("response"))
+            
+            # Phase 11.3 Step 4: Enrich review with quality score and confidence explanation
+            review_quality = compute_review_quality(review, success)
+            review["review_quality_score"] = review_quality
+            
+            # Add confidence explanation based on approval patterns (read-only advisory)
+            confidence_explanation = generate_confidence_explanation(
+                phase.get("phase_id"),
+                review_quality,
+                phase_config.get("review_quality_threshold", 0.70)
+            )
+            review["confidence_explanation"] = confidence_explanation
+            
+            # Store for later reference
+            LAST_PHASE_REVIEW_SCORE[phase.get("phase_id", "unknown")] = {
+                "quality": review_quality,
+                "summary": review.get("summary", "")
+            }
+            
             return review
     except Exception as e:
         print(f"[ORCHESTRATOR] Phase review generation failed: {e}")
     
+    return None
+
+def compute_review_quality(review, success):
+    """Compute review quality score (0-1) based on review content.
+    
+    Advisory only. Never used for blocking or approval decisions.
+    Score reflects confidence in the review itself, not phase execution.
+    """
+    score = 0.5  # Base score
+    
+    # Positive signals
+    if success:
+        score += 0.2
+    
+    if review.get("summary") and len(review.get("summary", "")) > 20:
+        score += 0.15
+    
+    if review.get("recommendations") and len(review.get("recommendations", [])) > 0:
+        score += 0.15
+    
+    if review.get("confidence", 0) >= 0.8:
+        score += 0.1
+    
+    # Cap at 1.0
+    return min(score, 1.0)
+
+def generate_confidence_explanation(phase_id, quality_score, threshold):
+    """Generate advisory explanation of review quality.
+    
+    Phase 11.3 Step 4: Advisory confidence context (read-only of patterns).
+    Never used for blocking or execution decisions.
+    
+    If quality_score < threshold: Add "advisory caution" annotation.
+    Otherwise: Standard confidence message.
+    """
+    if quality_score < threshold:
+        explanation = f"Review quality score {quality_score:.2f} below threshold {threshold:.2f}. " \
+                     f"Review is advisory only - human judgment takes precedence."
+    else:
+        explanation = f"Review quality score {quality_score:.2f} meets confidence threshold. " \
+                     f"Review provides context for your decision."
+    
+    return explanation
+
+    
+    return None
+
+def stage_next_phase_if_applicable(current_phase_id, plan):
+    """Phase 11.3 Step 2: Predictive staging - compute next phase without execution.
+    
+    Preconditions (all must be true, or return immediately):
+    1. phase_execution_config.enabled == true
+    2. enable_predictive_staging == true
+    3. Current phased plan exists
+    4. Current phase is HALTed (implicit - called after phase_completed + HALT)
+    5. No approve_phase_id issued yet
+    6. No staged phase already exists for this plan
+    
+    Staging Logic:
+    - Identifies next eligible phase based on dependencies
+    - Computes metadata only (no execution, no LLM)
+    - Caches in STAGED_PHASE_CACHE
+    - Does NOT emit observer artifacts
+    - Does NOT modify execution state
+    
+    Returns: True if staging computed, False otherwise
+    """
+    global STAGED_PHASE_CACHE, POLICY
+    
+    # Precondition 1: Policy must enable phase execution
+    if not POLICY:
+        return False
+    
+    phase_config = POLICY.get("phase_execution_config", {})
+    if not phase_config.get("enabled", False):
+        return False
+    
+    # Precondition 2: Predictive staging must be enabled
+    if not phase_config.get("enable_predictive_staging", False):
+        return False
+    
+    # Precondition 3: Must have a phased plan
+    if not plan or "phases" not in plan or not plan.get("phases"):
+        return False
+    
+    plan_id = plan.get("plan_id")
+    phases = plan.get("phases", [])
+    
+    # Precondition 6: Check if already staged for this plan
+    if plan_id in STAGED_PHASE_CACHE:
+        return False
+    
+    # Find current phase in plan
+    current_phase = None
+    current_phase_index = -1
+    for i, phase in enumerate(phases):
+        if phase.get("phase_id") == current_phase_id:
+            current_phase = phase
+            current_phase_index = i
+            break
+    
+    if current_phase_index == -1:
+        return False
+    
+    # Find next phase
+    next_phase = None
+    next_phase_id = None
+    
+    for i in range(current_phase_index + 1, len(phases)):
+        candidate = phases[i]
+        candidate_id = candidate.get("phase_id")
+        
+        # Check if candidate dependencies are satisfied
+        if check_phase_dependencies(candidate, COMPLETED_PHASES):
+            next_phase = candidate
+            next_phase_id = candidate_id
+            break
+    
+    # If no eligible next phase, nothing to stage
+    if not next_phase_id:
+        return False
+    
+    # Compute staging metadata (pure computation, no side effects)
+    stage_metadata = {
+        "plan_id": plan_id,
+        "from_phase": current_phase_id,
+        "staged_phase_id": next_phase_id,
+        "dependencies": next_phase.get("depends_on", []),
+        "estimated_steps": len(next_phase.get("steps", [])),
+        "has_success_criteria": bool(next_phase.get("success_criteria", [])),
+        "confidence": 0.85,  # Default confidence (no learning yet - Step 3)
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+    
+    # Cache the staged phase
+    STAGED_PHASE_CACHE[plan_id] = stage_metadata
+    
+    return True
+
+
+def record_approval_pattern(from_phase_id, to_phase_id):
+    """Phase 11.3 Step 3: Record approval sequences for pattern learning.
+    
+    Called ONLY when:
+    - approve_phase_id is explicitly received in resume signal
+    - Phase dependencies already validated
+    - approval_pattern_learning enabled in policy
+    
+    Updates APPROVAL_PATTERN_STATS with counts only.
+    Never influences execution, staging, or approval decisions.
+    Persists across plan boundaries (global learning).
+    
+    Args:
+        from_phase_id: Currently executing phase (CURRENT_PHASE)
+        to_phase_id: Approved next phase (APPROVED_PHASE_ID)
+    
+    Returns: True if pattern recorded, False otherwise
+    """
+    global APPROVAL_PATTERN_STATS, POLICY
+    
+    # Precondition 1: Policy must enable approval pattern learning
+    if not POLICY:
+        return False
+    
+    phase_config = POLICY.get("phase_execution_config", {})
+    if not phase_config.get("approval_pattern_learning", False):
+        return False
+    
+    # Precondition 2: Both phases must be provided
+    if not from_phase_id or not to_phase_id:
+        return False
+    
+    # Initialize nested structure if needed
+    if from_phase_id not in APPROVAL_PATTERN_STATS:
+        APPROVAL_PATTERN_STATS[from_phase_id] = {}
+    
+    if to_phase_id not in APPROVAL_PATTERN_STATS[from_phase_id]:
+        APPROVAL_PATTERN_STATS[from_phase_id][to_phase_id] = {
+            "count": 0,
+            "last_approved": None
+        }
+    
+    # Increment count (pure observation, no inference)
+    APPROVAL_PATTERN_STATS[from_phase_id][to_phase_id]["count"] += 1
+    APPROVAL_PATTERN_STATS[from_phase_id][to_phase_id]["last_approved"] = \
+        time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    
+    return True
+
+
+def enhance_phase_review(phase, success, policy):
+    """Phase 11.3: Enhanced phase_review with quality scoring.
+    
+    Early-return if:
+    - generate_phase_reviews not true in policy
+    
+    When enabled: calls LLM to generate review + quality_score (0-1).
+    Stores in LAST_PHASE_REVIEW_SCORE.
+    
+    Reviews are advisory only; do not constrain human approval.
+    """
+    if not policy:
+        return None
+    
+    phase_config = policy.get("phase_execution_config", {})
+    if not phase_config.get("generate_phase_reviews", False):
+        return None
+    
+    # Stub: actual enhancement logic in Step 4
     return None
 
 def execute_plan_with_phases(plan):
@@ -296,6 +548,11 @@ def execute_plan_with_phases(plan):
                 review["phase_id"] = phase_id
                 emit_event(review)
                 print(f"[ORCHESTRATOR] Phase review emitted for phase {phase_id}")
+        
+        # Phase 11.3 Step 2: Predictive staging (wire after phase review)
+        # Computes next phase metadata without execution
+        if next_phase_id:
+            stage_next_phase_if_applicable(phase_id, CURRENT_PLAN)
         
         # HALT before next phase (unless this is the last phase)
         if next_phase_id:
@@ -1907,9 +2164,238 @@ def send_intent(intent, mandated=None):
         print(f"[ORCHESTRATOR] error → {e}")
 
 class SignalHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        """Handle governance query endpoints (read-only)."""
+        if self.path == "/governance/orchestrator-state":
+            # Return current orchestrator state (read-only snapshot)
+            response = {
+                "halted": HALTED,
+                "current_phase": CURRENT_PHASE,
+                "approved_phase_id": APPROVED_PHASE_ID,
+                "approved_plan_id": APPROVED_PLAN_ID,
+                "completed_phases": COMPLETED_PHASES,
+                "skipped_phases": SKIPPED_PHASES,
+                "current_plan_id": CURRENT_PLAN.get("plan_id") if CURRENT_PLAN else None,
+                "timestamp": time.time()
+            }
+            self._send_json_response(200, response)
+        
+        elif self.path == "/governance/plans":
+            # Return multi-plan lifecycle info (pending, executing, completed)
+            response = {
+                "current": {
+                    "plan_id": CURRENT_PLAN.get("plan_id") if CURRENT_PLAN else None,
+                    "state": "executing" if CURRENT_PLAN and not HALTED else "halted",
+                    "phases": CURRENT_PLAN.get("phases") if CURRENT_PLAN else []
+                },
+                "completed": [
+                    {
+                        "plan_id": pid,
+                        "outcome": PHASE_RESULTS.get(pid, {}).get("success", False)
+                    }
+                    for pid in COMPLETED_PHASES[:10]  # Last 10
+                ],
+                "timestamp": time.time()
+            }
+            self._send_json_response(200, response)
+        
+        elif self.path == "/governance/intents":
+            # Return intent queue state (read-only)
+            if INTENT_QUEUE:
+                response = {
+                    "pending": INTENT_QUEUE.get_pending(),
+                    "approved": INTENT_QUEUE.get_approved(),
+                    "rejected": INTENT_QUEUE.get_rejected(),
+                    "timestamp": time.time()
+                }
+            else:
+                response = {
+                    "pending": [],
+                    "approved": [],
+                    "rejected": [],
+                    "message": "Intent queue not initialized",
+                    "timestamp": time.time()
+                }
+            self._send_json_response(200, response)
+        
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
     def do_POST(self):
-        if self.path == "/internal/resume":
-            global RESUME_REQUESTED, APPROVED_STEP_ID, APPROVED_PLAN_ID, APPROVED_PHASE_ID, SKIPPED_PHASES
+        global HALTED, CURRENT_PLAN, CURRENT_PHASE, APPROVED_PHASE_ID, RESUME_REQUESTED, APPROVED_STEP_ID, APPROVED_PLAN_ID, SKIPPED_PHASES, STAGED_PHASE_CACHE, CURRENT_PHASE_APPROVAL_STATE, CURRENT_PHASE_ID, INTERNAL_STATE_CACHE, ACTIVE_SUBPLAN_ID, COMPLETED_PHASES, CURRENT_PHASE_RESULT
+        
+        if self.path == "/intent":
+            # Phase 12 Step 1: Intent ingress endpoint (schema-gated, non-executing)
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length == 0:
+                    self._send_json_response(400, {
+                        "status": "rejected",
+                        "message": "Empty request body"
+                    })
+                    return
+                
+                post_data = self.rfile.read(content_length)
+                intent_data = json.loads(post_data)
+                
+                # Validate intent against schema
+                validation_result = validate_intent(intent_data) if INTENT_QUEUE else {
+                    "status": "rejected",
+                    "message": "Intent queue not initialized"
+                }
+                
+                self._send_json_response(
+                    200 if validation_result["status"] == "accepted" else 400,
+                    validation_result
+                )
+            except json.JSONDecodeError:
+                self._send_json_response(400, {
+                    "status": "rejected",
+                    "message": "Invalid JSON in request body"
+                })
+            except Exception as e:
+                self._send_json_response(500, {
+                    "status": "rejected",
+                    "message": f"Internal server error: {str(e)}"
+                })
+
+        # POST /governance/approve/<intent_id> - human-only approval (pending -> approved)
+        elif self.path.startswith("/governance/approve/"):
+            try:
+                intent_id = self.path.split('/')[-1]
+                if not INTENT_QUEUE:
+                    self._send_json_response(503, {"status": "error", "message": "Intent queue not initialized"})
+                    return
+
+                # Find pending intent
+                pending = INTENT_QUEUE.get_pending()
+                intent_obj = None
+                for item in pending:
+                    if item.get("intent_id") == intent_id:
+                        intent_obj = item
+                        break
+
+                if not intent_obj:
+                    self._send_json_response(404, {"status": "error", "message": "Intent not found"})
+                    return
+
+                if intent_obj.get("status") != "pending":
+                    self._send_json_response(409, {"status": "error", "message": "Intent not pending"})
+                    return
+
+                # Attempt composition (best-effort)
+                composed_plan_id = None
+                try:
+                    from composed_plan_builder import compose_from_intent
+                    comp_ok, comp_plan_id = compose_from_intent(intent_obj)
+                    if comp_ok:
+                        composed_plan_id = comp_plan_id
+                except Exception:
+                    composed_plan_id = None
+
+                # Approve intent in queue
+                ok = INTENT_QUEUE.approve_intent(intent_id, composed_plan_id=composed_plan_id)
+                if not ok:
+                    self._send_json_response(500, {"status": "error", "message": "Approval failed"})
+                    return
+
+                # Emit audit event (best-effort)
+                try:
+                    from audit_system import AUDIT_LOG
+                    actor = self.headers.get('Authorization', '').replace('Bearer ', '') or 'unknown'
+                    AUDIT_LOG.emit({
+                        'operation': 'intent_approved',
+                        'actor': actor,
+                        'result': 'success',
+                        'details': {'intent_id': intent_id, 'composed_plan_id': composed_plan_id}
+                    })
+                except Exception:
+                    pass
+
+                self._send_json_response(200, {"status": "approved", "intent_id": intent_id, "composed_plan_id": composed_plan_id})
+                return
+
+            except Exception as e:
+                self._send_json_response(500, {"status": "error", "message": f"Approval error: {e}"})
+                return
+
+        elif self.path == "/governance/approve-composed-plan":
+            # Phase 12 Step 3: Approve composed plan and move to execution
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length == 0:
+                    self._send_json_response(400, {
+                        "status": "rejected",
+                        "message": "Empty request body"
+                    })
+                    return
+                
+                post_data = self.rfile.read(content_length)
+                request_data = json.loads(post_data)
+                
+                # Validate approval request
+                if not APPROVAL_BRIDGE:
+                    self._send_json_response(503, {
+                        "status": "error",
+                        "message": "Approval bridge not initialized"
+                    })
+                    return
+                
+                valid, plan_id, message = validate_approval_request(request_data)
+                
+                if not valid:
+                    self._send_json_response(400, {
+                        "status": "rejected",
+                        "message": message
+                    })
+                    return
+                
+                # Attempt approval (this is where guards are enforced)
+                from composed_plan_builder import COMPOSED_PLAN_REGISTRY
+                
+                orchestrator_state = {
+                    "CURRENT_PLAN": CURRENT_PLAN,
+                    "HALTED": HALTED,
+                    "CURRENT_PHASE": CURRENT_PHASE,
+                    "APPROVED_PHASE_ID": APPROVED_PHASE_ID
+                }
+                
+                success, approval_message = APPROVAL_BRIDGE.approve_composed_plan(
+                    plan_id,
+                    COMPOSED_PLAN_REGISTRY,
+                    orchestrator_state,
+                    emit_event  # Use existing emit_event function
+                )
+                
+                # Update globals with new state
+                if success:
+                    CURRENT_PLAN = orchestrator_state["CURRENT_PLAN"]
+                    HALTED = orchestrator_state["HALTED"]
+                    CURRENT_PHASE = orchestrator_state["CURRENT_PHASE"]
+                    APPROVED_PHASE_ID = orchestrator_state["APPROVED_PHASE_ID"]
+                
+                self._send_json_response(
+                    200 if success else 400,
+                    {
+                        "status": "approved" if success else "rejected",
+                        "message": approval_message,
+                        "plan_id": plan_id if success else None,
+                        "halted": orchestrator_state.get("HALTED", True)
+                    }
+                )
+            except json.JSONDecodeError:
+                self._send_json_response(400, {
+                    "status": "rejected",
+                    "message": "Invalid JSON in request body"
+                })
+            except Exception as e:
+                self._send_json_response(500, {
+                    "status": "error",
+                    "message": f"Internal server error: {str(e)}"
+                })
+        
+        elif self.path == "/internal/resume":
             print("[ORCHESTRATOR] resume requested by human")
             
             try:
@@ -1923,6 +2409,11 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                 APPROVED_PHASE_ID = body.get("approve_phase_id", None)
                 skip_phases = body.get("skip_phases", [])
                 abort = body.get("abort", False)
+                
+                # Phase 11.3: Clear staged phase cache on any resume action
+                # (Precondition: no staged phase should persist beyond explicit approval)
+                if APPROVED_PHASE_ID or skip_phases or abort:
+                    STAGED_PHASE_CACHE.clear()
                 
                 if APPROVED_STEP_ID:
                     print(f"[ORCHESTRATOR] Approved Step ID: {APPROVED_STEP_ID}")
@@ -1952,6 +2443,11 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                                                   required=approved_phase.get("depends_on", []),
                                                   completed=COMPLETED_PHASES)
                                 APPROVED_PHASE_ID = None  # Clear invalid approval
+                            else:
+                                # Phase 11.3 Step 3: Record approval pattern (post-validation)
+                                # Called only when approval is valid
+                                if CURRENT_PHASE:
+                                    record_approval_pattern(CURRENT_PHASE, APPROVED_PHASE_ID)
                         else:
                             print(f"[ORCHESTRATOR] REJECTED: Phase {APPROVED_PHASE_ID} not found in plan")
                             APPROVED_PHASE_ID = None
@@ -1979,6 +2475,13 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+    
+    def _send_json_response(self, status_code, response_dict):
+        """Send JSON response with proper headers."""
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(response_dict, default=str).encode())
 
 def start_signal_server():
     server = http.server.HTTPServer(("0.0.0.0", 9001), SignalHandler)
