@@ -6,26 +6,94 @@ import requests
 ORCHESTRATOR_SIGNAL_URL = "http://ct-orchestrator:9001/internal/resume"
 
 class GatewayHandler(http.server.BaseHTTPRequestHandler):
+    def _unauthorized(self, msg=b"Missing or invalid Authorization header"):
+        self.send_response(401)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"code": "AUTH_INVALID_KEY", "message": msg.decode() if isinstance(msg, bytes) else msg}).encode())
+
+    def _bad_request(self, msg=b"Bad request"):
+        self.send_response(400)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"code": "INVALID_REQUEST", "message": msg.decode() if isinstance(msg, bytes) else msg}).encode())
+
+    def _proxy_get(self, target_path, headers):
+        try:
+            resp = requests.get(f"http://ct-orchestrator:9001{target_path}", headers=headers, timeout=5)
+            self.send_response(resp.status_code)
+            for k, v in resp.headers.items():
+                if k.lower() == 'content-length':
+                    continue
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(resp.content)
+            return True
+        except Exception as e:
+            self.send_response(502)
+            self.end_headers()
+            self.wfile.write(f"Gateway proxy error: {e}".encode())
+            return False
+
     def do_GET(self):
-        if self.path == "/health":
+        # Health endpoints open
+        if self.path in ("/health", "/healthz", "/readyz"):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(b'{"status":"ok"}')
-        else:
-            self.send_response(404)
-            self.end_headers()
+            return
+
+        # Proxy governance read endpoints but require auth
+        if self.path.startswith("/governance/"):
+            auth = self.headers.get('Authorization','')
+            if not auth.startswith('Bearer '):
+                return self._unauthorized()
+
+            api_key = auth.replace('Bearer ', '')
+            # Use centralized validator
+            from gateway_auth import validate_request
+            status_code, err = validate_request(api_key, 'GET', self.path, dict(self.headers), 0)
+            if status_code != 200:
+                # map to HTTP response code
+                self.send_response(status_code)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"code": err or "AUTH_INVALID_KEY", "message": "Request rejected"}).encode())
+                return
+
+            # Forward to orchestrator
+            return self._proxy_get(self.path, headers={'Authorization': auth})
+
+        # Unhandled
+        self.send_response(404)
+        self.end_headers()
 
     def do_POST(self):
         if self.path == "/intent":
+            # Validate auth and rate limit first
+            auth = self.headers.get('Authorization','')
+            if not auth.startswith('Bearer '):
+                return self._unauthorized()
+
+            api_key = auth.replace('Bearer ', '')
+            from gateway_auth import validate_request
+            content_length = int(self.headers.get('Content-Length', 0))
+            status_code, err = validate_request(api_key, 'POST', self.path, dict(self.headers), content_length)
+            if status_code != 200:
+                self.send_response(status_code)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"code": err or "AUTH_INVALID_KEY", "message": "Request rejected"}).encode())
+                return
+
             # Proxy intent submissions to orchestrator (thin gateway, no business logic)
             try:
-                content_length = int(self.headers.get('Content-Length', 0))
                 body = self.rfile.read(content_length) if content_length > 0 else b""
 
                 resp = requests.post("http://ct-orchestrator:9001/intent",
                                      data=body,
-                                     headers={"Content-Type": self.headers.get("Content-Type", "application/json")},
+                                     headers={"Content-Type": self.headers.get("Content-Type", "application/json"), 'Authorization': auth},
                                      timeout=5)
 
                 self.send_response(resp.status_code)
@@ -46,9 +114,16 @@ class GatewayHandler(http.server.BaseHTTPRequestHandler):
             sys.stdout.flush()
 
             if not auth.startswith('Bearer '):
-                self.send_response(401)
+                return self._unauthorized()
+
+            api_key = auth.replace('Bearer ', '')
+            from gateway_auth import validate_request
+            status_code, err = validate_request(api_key, 'POST', self.path, dict(self.headers), 0)
+            if status_code != 200:
+                self.send_response(status_code)
+                self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(b"Missing or invalid Authorization header")
+                self.wfile.write(json.dumps({"code": err or "AUTH_INVALID_KEY", "message": "Request rejected"}).encode())
                 return
 
             intent_id = self.path.split('/')[-1]
@@ -82,16 +157,30 @@ class GatewayHandler(http.server.BaseHTTPRequestHandler):
                 return
 
         if self.path == "/resume":
-            content_length = int(self.headers['Content-Length'])
-            body = self.rfile.read(content_length)
-            
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else b""
+
+            auth = self.headers.get('Authorization','')
+            if not auth.startswith('Bearer '):
+                return self._unauthorized()
+
+            api_key = auth.replace('Bearer ', '')
+            from gateway_auth import validate_request
+            status_code, err = validate_request(api_key, 'POST', self.path, dict(self.headers), content_length)
+            if status_code != 200:
+                self.send_response(status_code)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"code": err or "AUTH_INVALID_KEY", "message": "Request rejected"}).encode())
+                return
+
             try:
-                data = json.loads(body)
+                data = json.loads(body) if body else {}
                 if data.get("ack") is True:
                     print("[GATEWAY] Valid resume signal received, signaling orchestrator...")
                     sys.stdout.flush()
                     resp = requests.post(ORCHESTRATOR_SIGNAL_URL, timeout=5)
-                    
+
                     if resp.status_code == 200:
                         self.send_response(200)
                         self.end_headers()
@@ -101,9 +190,7 @@ class GatewayHandler(http.server.BaseHTTPRequestHandler):
                         self.end_headers()
                         self.wfile.write(b"Failed to signal orchestrator.")
                 else:
-                    self.send_response(400)
-                    self.end_headers()
-                    self.wfile.write(b"Missing ack: true in payload.")
+                    return self._bad_request(b"Missing ack: true in payload.")
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()
