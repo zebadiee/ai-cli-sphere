@@ -1,0 +1,6 @@
+## Gateway /health
+{"status":"ok"}
+## Orchestrator /health
+
+## Governance intents
+{"pending": [{"intent_id": "c24926a8-1acb-4770-8e4b-504a67fe7712", "source": "user_cli", "data": {"intent": "inspect_repo", "target": "Graph.tsx", "confidence": 0.8, "mode": "reason-only", "source": "user_cli"}, "arrival_time": "2026-01-12T21:22:21.701366Z", "status": "pending", "composed_plan_id": null}], "approved": [], "rejected": [], "timestamp": 1768253120.228942}
