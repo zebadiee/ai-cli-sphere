@@ -1930,9 +1930,42 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                     print(f"[ORCHESTRATOR] Approved Plan ID: {APPROVED_PLAN_ID}")
                 if APPROVED_PHASE_ID:
                     print(f"[ORCHESTRATOR] Approved Phase ID: {APPROVED_PHASE_ID}")
+                    
+                    # Step 2.3: Validate phase approval
+                    if CURRENT_PLAN and "phases" in CURRENT_PLAN:
+                        phase_config = POLICY.get("phase_execution_config", {}) if POLICY else {}
+                        phases = CURRENT_PLAN["phases"]
+                        
+                        # Find the approved phase
+                        approved_phase = None
+                        for p in phases:
+                            if p.get("phase_id") == APPROVED_PHASE_ID:
+                                approved_phase = p
+                                break
+                        
+                        if approved_phase:
+                            # Check dependencies
+                            if not check_phase_dependencies(approved_phase, COMPLETED_PHASES):
+                                print(f"[ORCHESTRATOR] REJECTED: Phase {APPROVED_PHASE_ID} dependencies not met")
+                                emit_phase_artifact("phase_blocked", approved_phase, CURRENT_PLAN.get("plan_id", "unknown"),
+                                                  reason="dependencies_not_met",
+                                                  required=approved_phase.get("depends_on", []),
+                                                  completed=COMPLETED_PHASES)
+                                APPROVED_PHASE_ID = None  # Clear invalid approval
+                        else:
+                            print(f"[ORCHESTRATOR] REJECTED: Phase {APPROVED_PHASE_ID} not found in plan")
+                            APPROVED_PHASE_ID = None
+                
                 if skip_phases:
-                    SKIPPED_PHASES.extend(skip_phases)
-                    print(f"[ORCHESTRATOR] Skipping phases: {skip_phases}")
+                    # Step 2.3: Validate skip request
+                    phase_config = POLICY.get("phase_execution_config", {}) if POLICY else {}
+                    if not phase_config.get("allow_phase_skipping", True):
+                        print(f"[ORCHESTRATOR] REJECTED: Phase skipping disabled by policy")
+                        skip_phases = []  # Clear invalid skip
+                    else:
+                        SKIPPED_PHASES.extend(skip_phases)
+                        print(f"[ORCHESTRATOR] Skipping phases: {skip_phases}")
+                
                 if abort:
                     print(f"[ORCHESTRATOR] Abort requested - terminating remaining phases")
                     # Abort will be handled in main loop
@@ -2045,7 +2078,22 @@ while True:
         mandated = None
         is_post_resume = JUST_RESUMED
         if JUST_RESUMED:
-            # Phase 4.1: Step Approval Protocol
+            # Phase 11.2: Route to phased execution if applicable
+            if CURRENT_PLAN:
+                phase_config = POLICY.get("phase_execution_config", {}) if POLICY else {}
+                has_phases = "phases" in CURRENT_PLAN and CURRENT_PLAN.get("phases")
+                phase_enabled = phase_config.get("enabled", False)
+                
+                if phase_enabled and has_phases:
+                    # Phased execution path
+                    print("[ORCHESTRATOR] Entering phased execution mode")
+                    execute_plan_with_phases(CURRENT_PLAN)
+                    # After phased execution, system will HALT at phase boundaries
+                    # or complete the plan
+                    JUST_RESUMED = False
+                    continue
+            
+            # Phase 4.1: Step Approval Protocol (flat execution path)
             if CURRENT_PLAN and APPROVED_STEP_ID:
                 for step in CURRENT_PLAN.get("steps", []):
                     if step.get("id") == APPROVED_STEP_ID:
