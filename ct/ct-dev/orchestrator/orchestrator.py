@@ -177,6 +177,213 @@ def rank_plans(plan_set, calibration_state, policy):
     
     return ranked_plans, ranking_breakdown
 
+def delegate_plan_generation(artifact, policy, calibration_state):
+    """Spawn N sub-agents to generate independent plan sets.
+    
+    Phase 11.0 Implementation:
+    - Each agent gets same evidence, different framing
+    - All agents apply pruning + ranking independently
+    - Returns list of (agent_id, plan_set, ranking_breakdown) tuples
+    
+    No tools executed. No authority change. Purely reasoning.
+    """
+    delegation_config = policy.get("delegation_config", {})
+    if not delegation_config.get("enabled", False):
+        return None
+    
+    agent_count = min(
+        delegation_config.get("agent_count", 3),
+        delegation_config.get("max_agents", 5)
+    )
+    
+    agents = [
+        ("A", SUBAGENT_CONSERVATIVE_FRAMING, "Conservative / Risk-Minimizing"),
+        ("B", SUBAGENT_SPEED_FRAMING, "Speed / Minimal Change"),
+        ("C", SUBAGENT_LONGTERM_FRAMING, "Long-Term Maintainability")
+    ][:agent_count]
+    
+    delegated_plan_sets = []
+    
+    for agent_id, framing, description in agents:
+        print(f"[ORCHESTRATOR] Delegating to Sub-Agent {agent_id} ({description})...")
+        
+        # Build prompt for this sub-agent
+        policy_block = f"POLICY CONSTRAINTS (MANDATORY):\n{json.dumps(policy, indent=2)}\n"
+        prompt = f"""{framing}
+
+{policy_block}
+
+COGNITIVE ARTIFACT (same evidence for all agents):
+{json.dumps(artifact, indent=2)}
+
+Your task: Generate 2-3 alternative execution plans optimized for your role.
+Output ONLY valid JSON matching this schema:
+
+{{
+  "type": "execution_plan_set",
+  "goal": "High-level objective (2-3 sentences)",
+  "plans": [
+    {{
+      "plan_id": "A",
+      "summary": "...",
+      "steps": [...],
+      "pros": [...],
+      "cons": [...],
+      "risks": [...],
+      "confidence": 0.0-1.0
+    }}
+  ],
+  "recommended_plan_id": "A",
+  "reasoning": "Why you recommend this plan (2-3 sentences)"
+}}
+
+Generate your best thinking. All plans will be evaluated independently.
+"""
+        
+        try:
+            response = requests.post(
+                LLM_URL,
+                json={
+                    "model": "qwen2.5:7b",
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json"
+                },
+                timeout=120
+            )
+            
+            if response.status_code == 200:
+                plan_set = json.loads(response.json().get("response"))
+                print(f"[ORCHESTRATOR] Sub-Agent {agent_id} generated plan set")
+                
+                # Apply pruning (same as main orchestrator)
+                approved_plans, rejected = prune_plans_by_policy(plan_set, policy)
+                plan_set["plans"] = approved_plans
+                
+                # Apply ranking
+                ranked_plans, ranking_breakdown = rank_plans(plan_set, calibration_state, policy)
+                plan_set["plans"] = ranked_plans
+                
+                # Emit delegated_plan_set artifact
+                delegated_event = {
+                    "type": "delegated_plan_set",
+                    "agent_id": agent_id,
+                    "agent_role": description,
+                    "plan_set": plan_set,
+                    "ranking_breakdown": ranking_breakdown
+                }
+                emit_event(delegated_event)
+                
+                delegated_plan_sets.append((agent_id, plan_set, ranking_breakdown, description))
+                print(f"[ORCHESTRATOR] Sub-Agent {agent_id} plan set emitted and ranked")
+            else:
+                print(f"[ORCHESTRATOR] Sub-Agent {agent_id} LLM error: {response.status_code}")
+        except Exception as e:
+            print(f"[ORCHESTRATOR] Sub-Agent {agent_id} exception: {e}")
+    
+    if not delegated_plan_sets:
+        print("[ORCHESTRATOR] No sub-agents produced valid plan sets")
+        return None
+    
+    return delegated_plan_sets
+
+def negotiate_plan_sets(delegated_plan_sets, policy):
+    """Synthesize insights from multiple sub-agents.
+    
+    Compares plan sets and produces a meta-comparison artifact.
+    No merging, no hidden compromises—just explicit comparison.
+    """
+    if not delegated_plan_sets:
+        return None
+    
+    print("[ORCHESTRATOR] Negotiating between sub-agent plan sets...")
+    
+    # Build comparison context
+    agent_summaries = []
+    for agent_id, plan_set, ranking_breakdown, role in delegated_plan_sets:
+        summary = {
+            "agent_id": agent_id,
+            "agent_role": role,
+            "top_plan_id": plan_set.get("plans", [{}])[0].get("plan_id") if plan_set.get("plans") else None,
+            "top_plan_summary": plan_set.get("plans", [{}])[0].get("summary") if plan_set.get("plans") else None,
+            "top_plan_confidence": plan_set.get("plans", [{}])[0].get("confidence") if plan_set.get("plans") else 0.0,
+            "recommendation": plan_set.get("recommended_plan_id"),
+            "reasoning": plan_set.get("reasoning")
+        }
+        agent_summaries.append(summary)
+    
+    prompt = f"""You are CT's meta-negotiation unit.
+Your task is to compare insights from 3 sub-agents with different perspectives:
+- Agent A: Conservative / Risk-Minimizing
+- Agent B: Speed / Minimal Change  
+- Agent C: Long-Term Maintainability
+
+SUB-AGENT RECOMMENDATIONS:
+{json.dumps(agent_summaries, indent=2)}
+
+Analyze:
+1. Where do they agree? (consensus)
+2. Where do they diverge? (legitimate tradeoffs)
+3. What does each perspective add?
+4. Are there any red flags?
+
+Output ONLY valid JSON:
+{{
+  "type": "meta_plan_comparison",
+  "summary": "Overall synthesis of sub-agent insights (3-4 sentences)",
+  "consensus": {{
+    "agreed_principles": ["principle 1", ...],
+    "shared_concerns": ["concern 1", ...]
+  }},
+  "divergences": [
+    {{
+      "dimension": "speed vs safety",
+      "agents_favoring_option_a": ["A", "B"],
+      "agents_favoring_option_b": ["C"],
+      "tradeoff_explanation": "..."
+    }}
+  ],
+  "agent_contributions": [
+    {{
+      "agent_id": "A",
+      "key_insight": "What this agent adds to thinking",
+      "confidence": 0.8
+    }}
+  ],
+  "meta_recommendation": "How to integrate these perspectives (2-3 sentences)",
+  "confidence": 0.0-1.0
+}}
+
+Guidelines:
+- Show legitimate disagreement, don't hide it
+- Explain tradeoffs clearly
+- Value diversity of thinking
+- Do not attempt to merge plans or hide compromises
+- Output JSON only. No preamble or explanation.
+"""
+    
+    try:
+        response = requests.post(
+            LLM_URL,
+            json={
+                "model": "qwen2.5:7b",
+                "prompt": prompt,
+                "stream": False,
+                "format": "json"
+            },
+            timeout=120
+        )
+        
+        if response.status_code == 200:
+            meta_comparison = json.loads(response.json().get("response"))
+            return meta_comparison
+        else:
+            print(f"[ORCHESTRATOR] Meta-negotiation LLM error: {response.status_code}")
+    except Exception as e:
+        print(f"[ORCHESTRATOR] Meta-negotiation exception: {e}")
+    
+    return None
+
 SYSTEM_PROMPT_TEMPLATE = """You are CT's reasoning core.
 
 {plan_context_block}
@@ -401,7 +608,35 @@ Guidelines:
 - Do not apologize or be overly verbose
 """
 
-print("CT orchestrator online (LLM-driven, restraint-locked, Memory v1)")
+# Sub-Agent Prompt Templates (Phase 11.0)
+SUBAGENT_CONSERVATIVE_FRAMING = """You are Sub-Agent A: The Conservative Advisor.
+Your role is to propose the safest, most risk-minimizing approaches.
+- Prefer incremental changes over large refactors
+- Minimize blast radius of any action
+- Maximize rollback safety
+- Err on the side of doing less rather than more
+- Highlight potential failure modes explicitly
+"""
+
+SUBAGENT_SPEED_FRAMING = """You are Sub-Agent B: The Speed Optimizer.
+Your role is to propose the fastest, most efficient approaches.
+- Minimize number of steps required
+- Prioritize quick wins
+- Accept minor technical debt if it unblocks progress
+- Suggest parallel execution where possible
+- Focus on getting to a working state quickly, then iterate
+"""
+
+SUBAGENT_LONGTERM_FRAMING = """You are Sub-Agent C: The Sustainability Advisor.
+Your role is to propose approaches optimized for long-term maintainability.
+- Design for extensibility and clarity
+- Consider how this decision affects future work
+- Recommend refactors that pay technical debt
+- Suggest modular, reusable patterns
+- Think about maintainability for future operators
+"""
+
+print("CT orchestrator online (LLM-driven, restraint-locked, Memory v1, delegated reasoning)")
 
 def get_penalty(intent_type, mode):
     return CALIBRATION.get((intent_type, mode), 1.0)
@@ -602,7 +837,11 @@ def generate_execution_plan(artifact):
     return None
 
 def generate_execution_plan_set(artifact):
-    """Generate 2-3 alternative execution plans with tradeoffs and HALT."""
+    """Generate 2-3 alternative execution plans with tradeoffs and HALT.
+    
+    Phase 11.0: If delegation is enabled, spawn sub-agents with different framings.
+    Otherwise, use single-agent multi-plan generation.
+    """
     global HALTED, LAST_PLAN_SET, APPROVED_PLAN_ID
     print(f"[ORCHESTRATOR] Generating multi-plan negotiation based on {artifact.get('type')}...")
     
@@ -625,6 +864,48 @@ def generate_execution_plan_set(artifact):
                 HALTED = True
                 return None
     
+    # Phase 11.0: Check for delegated reasoning
+    delegation_config = POLICY.get("delegation_config", {})
+    if delegation_config.get("enabled", False):
+        print("[ORCHESTRATOR] Delegation enabled. Spawning sub-agents...")
+        delegated_plan_sets = delegate_plan_generation(artifact, POLICY, CALIBRATION)
+        
+        if delegated_plan_sets and len(delegated_plan_sets) > 0:
+            print(f"[ORCHESTRATOR] Collected {len(delegated_plan_sets)} sub-agent plan sets")
+            
+            # Perform meta-negotiation
+            meta_comparison = negotiate_plan_sets(delegated_plan_sets, POLICY)
+            if meta_comparison:
+                emit_event(meta_comparison)
+                print("[ORCHESTRATOR] Meta-negotiation complete, emitted meta_plan_comparison")
+            
+            # Consolidate into single plan set for review
+            # Use Agent A's top plan as the representative plan_set
+            agent_a_set = delegated_plan_sets[0][1]  # First agent's plan_set
+            plan_set = agent_a_set.copy()
+            LAST_PLAN_SET = plan_set
+            APPROVED_PLAN_ID = None
+            
+            # Generate review noting multi-agent input
+            print("[ORCHESTRATOR] Generating review for delegated plan sets...")
+            review_artifact = generate_multiplan_review_artifact(plan_set, [], delegated_plan_sets[0][2])
+            if review_artifact:
+                # Add delegation context
+                review_artifact["delegation_context"] = {
+                    "agent_count": len(delegated_plan_sets),
+                    "agent_ids": [a[0] for a in delegated_plan_sets],
+                    "meta_comparison_summary": meta_comparison.get("summary") if meta_comparison else None
+                }
+                emit_event(review_artifact)
+                print("[ORCHESTRATOR] Delegated review artifact emitted.")
+            
+            print("[ORCHESTRATOR] Entering HALT state (delegated multi-agent planning complete).")
+            HALTED = True
+            return plan_set
+        else:
+            print("[ORCHESTRATOR] Sub-agent delegation failed, falling back to single-agent planning")
+    
+    # Single-agent planning (original path, preserved for backward compatibility)
     policy_block = ""
     if POLICY:
         policy_block = f"POLICY CONSTRAINTS (MANDATORY):\n{json.dumps(POLICY, indent=2)}\n"
