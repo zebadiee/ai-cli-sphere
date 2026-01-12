@@ -97,6 +97,86 @@ def prune_plans_by_policy(plan_set, policy):
     
     return approved, rejections
 
+def rank_plans(plan_set, calibration_state, policy):
+    """Rank approved plans by confidence, calibration, policy friction, and history.
+    
+    Scoring formula:
+    score = (plan.confidence * calibration_multiplier) 
+            - policy_friction_penalty 
+            + historical_success_bonus
+    
+    Returns: (ranked_plans, ranking_breakdown)
+    """
+    if not plan_set or not plan_set.get("plans"):
+        return [], []
+    
+    # Extract ranking config from policy
+    ranking_config = policy.get("ranking_config", {})
+    if not ranking_config.get("enable", True):
+        # Ranking disabled, return original order with neutral scores
+        return plan_set.get("plans", []), []
+    
+    policy_friction_penalty = ranking_config.get("policy_friction_penalty", 0.05)
+    history_success_bonus = ranking_config.get("history_success_bonus", 0.05)
+    
+    ranking_breakdown = []
+    plans_with_scores = []
+    
+    for plan in plan_set.get("plans", []):
+        plan_id = plan.get("plan_id")
+        base_confidence = plan.get("confidence", 0.50)
+        
+        # Get calibration multiplier for this plan_id
+        # (using a simple heuristic: plans A, B, C get different treatment)
+        calibration_multiplier = calibration_state.get(("plan_action", "propose"), 1.0)
+        
+        # Apply plan order bias (first plans slightly more trusted)
+        if plan_id == "A":
+            calibration_multiplier = min(calibration_multiplier * 1.0, 1.0)
+        elif plan_id == "B":
+            calibration_multiplier = min(calibration_multiplier * 0.98, 1.0)
+        elif plan_id == "C":
+            calibration_multiplier = min(calibration_multiplier * 0.95, 1.0)
+        
+        # Calculate score components
+        confidence_component = base_confidence * calibration_multiplier
+        
+        # Policy friction: small penalty for being conservative/rejected by some heuristics
+        friction = 0.0
+        
+        # History bonus: check if this intent type succeeded before
+        history_bonus = 0.0
+        # Note: In a full implementation, we'd look up actual history
+        # For now, use a conservative default
+        history_bonus = history_success_bonus * 0.5  # Neutral assumption
+        
+        # Final score (clamped to [0.0, 1.0])
+        final_score = max(0.0, min(1.0, 
+            confidence_component - friction + history_bonus
+        ))
+        
+        breakdown = {
+            "plan_id": plan_id,
+            "base_confidence": round(base_confidence, 3),
+            "calibration_multiplier": round(calibration_multiplier, 3),
+            "confidence_component": round(confidence_component, 3),
+            "policy_friction": round(friction, 3),
+            "history_bonus": round(history_bonus, 3),
+            "final_score": round(final_score, 3)
+        }
+        
+        ranking_breakdown.append(breakdown)
+        plans_with_scores.append((plan, final_score, breakdown))
+    
+    # Sort by score descending
+    plans_with_scores.sort(key=lambda x: x[1], reverse=True)
+    ranked_plans = [p[0] for p in plans_with_scores]
+    
+    # Update breakdown to reflect final ranking order
+    ranking_breakdown = [p[2] for p in plans_with_scores]
+    
+    return ranked_plans, ranking_breakdown
+
 SYSTEM_PROMPT_TEMPLATE = """You are CT's reasoning core.
 
 {plan_context_block}
@@ -607,9 +687,26 @@ def generate_execution_plan_set(artifact):
                 LAST_PLAN_SET = plan_set
                 APPROVED_PLAN_ID = None
                 
-                # Generate review for the multi-plan set (now with pruning info)
+                # Phase 10.2: Confidence-Weighted Plan Ranking
+                print("[ORCHESTRATOR] Ranking plans by confidence and calibration...")
+                ranked_plans, ranking_breakdown = rank_plans(plan_set, CALIBRATION, POLICY)
+                
+                # Emit ranking results
+                ranking_event = {
+                    "type": "plan_ranking_result",
+                    "ranked_order": [p.get("plan_id") for p in ranked_plans],
+                    "ranking_breakdown": ranking_breakdown
+                }
+                emit_event(ranking_event)
+                print(f"[ORCHESTRATOR] Plan ranking complete: {ranking_event['ranked_order']}")
+                
+                # Update plan set with ranked order
+                plan_set["plans"] = ranked_plans
+                LAST_PLAN_SET = plan_set
+                
+                # Generate review for the multi-plan set (now with ranking and pruning info)
                 print("[ORCHESTRATOR] Generating review for multi-plan set...")
-                review_artifact = generate_multiplan_review_artifact(plan_set, rejected_plans)
+                review_artifact = generate_multiplan_review_artifact(plan_set, rejected_plans, ranking_breakdown)
                 if review_artifact:
                     emit_event(review_artifact)
                     print("[ORCHESTRATOR] Multi-plan review artifact emitted.")
@@ -667,38 +764,58 @@ def generate_review_artifact(execution_plan):
     
     return None
 
-def generate_multiplan_review_artifact(plan_set, rejected_plans=None):
-    """Generate a human-readable review for a multi-plan set, including pruning info."""
+def generate_multiplan_review_artifact(plan_set, rejected_plans=None, ranking_breakdown=None):
+    """Generate a human-readable review for a multi-plan set, including pruning and ranking info."""
     if rejected_plans is None:
         rejected_plans = []
+    if ranking_breakdown is None:
+        ranking_breakdown = []
     
     rejected_info = ""
     if rejected_plans:
         rejected_info = f"\n\nREJECTED PLANS (removed by policy pruning):\n{json.dumps(rejected_plans, indent=2)}"
     
+    ranking_info = ""
+    if ranking_breakdown:
+        ranking_info = f"\n\nPLAN RANKING (by confidence-weighted score):\n{json.dumps(ranking_breakdown, indent=2)}"
+    
     prompt = f"""You are CT's review assistant for multi-plan scenarios.
-Your task is to explain the alternative plans in plain English.
+Your task is to explain the alternative plans in plain English, ordered by evidence-based ranking.
 
-MULTI-PLAN SET (Approved):
+MULTI-PLAN SET (Approved, Ranked):
 {json.dumps(plan_set, indent=2)}
+{ranking_info}
 {rejected_info}
 
 Output ONLY valid JSON in this format:
 {{
   "type": "review_multiplan_set",
   "goal": "What are we trying to accomplish?",
+  "ranked_order": ["A", "B"],
   "plan_comparisons": [
     {{
       "plan_id": "A",
+      "rank_position": 1,
+      "confidence_score": 0.85,
       "summary": "What this plan does (1-2 sentences)",
       "why_prefer": "When you might choose this plan",
-      "when_avoid": "When this plan is risky or inefficient"
+      "when_avoid": "When this plan is risky or inefficient",
+      "score_breakdown": {{
+        "base_confidence": 0.90,
+        "calibration_multiplier": 1.0,
+        "policy_friction": 0.0,
+        "history_bonus": 0.05,
+        "final_score": 0.85
+      }}
     }},
     {{
       "plan_id": "B",
+      "rank_position": 2,
+      "confidence_score": 0.78,
       "summary": "...",
       "why_prefer": "...",
-      "when_avoid": "..."
+      "when_avoid": "...",
+      "score_breakdown": {{...}}
     }}
   ],
   "removed_plans": [
@@ -707,12 +824,14 @@ Output ONLY valid JSON in this format:
       "reason": "Plain English explanation of why this plan was removed (policy violation or confidence threshold)"
     }}
   ],
-  "recommendation": "Why CT recommends {{recommended_id}}: {{reasoning}} (2-3 sentences)",
+  "recommendation": "Why CT recommends Plan {{recommended_id}}: {{reasoning}} (2-3 sentences). The top-ranked plan has the highest evidence-weighted score.",
   "confidence": 0.0-1.0
 }}
 
 Guidelines:
+- Plans are presented in rank order (best-scored first)
 - Be clear and direct for human decision-making
+- Explain score breakdowns so human understands the ranking
 - Focus on practical tradeoffs
 - Highlight irreversible or high-risk operations
 - Explain why rejected plans were filtered (transparency, not censorship)

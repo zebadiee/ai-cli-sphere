@@ -14,5 +14,10 @@
   "plan_safety_rules": {
     "forbidden_actions": [],
     "sandbox_only_actions": ["apply_patch"]
+  },
+  "ranking_config": {
+    "enable": true,
+    "policy_friction_penalty": 0.05,
+    "history_success_bonus": 0.05
   }
 }
