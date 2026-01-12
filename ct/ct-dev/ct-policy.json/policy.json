@@ -24,5 +24,13 @@
     "enabled": false,
     "agent_count": 3,
     "max_agents": 5
+  },
+  "learning_config": {
+    "enabled": false,
+    "decay_rate": 0.95,
+    "learning_rate": 0.15,
+    "min_weight": 0.5,
+    "max_weight": 1.5
   }
 }
+

@@ -31,6 +31,7 @@ APPROVED_STEP_ID = None
 APPROVED_PLAN_ID = None
 POLICY_PATH = "/app/ct-policy.json"
 POLICY = {}
+LAST_DELEGATED_AGENTS = {}  # Track which agent produced which plan in current set
 
 try:
     if os.path.exists(POLICY_PATH):
@@ -44,6 +45,58 @@ except Exception as e:
 
 # Memory v1 state
 CALIBRATION = {}
+
+# Phase 11.1: Agent Preference Learning
+# Tracks which agent framings humans prefer over time
+AGENT_PREFERENCE_WEIGHTS = {
+    "A": 1.0,  # Conservative
+    "B": 1.0,  # Speed
+    "C": 1.0   # Long-Term
+}
+
+def update_agent_preference(selected_agent_id, policy):
+    """Learn from human plan selections.
+    
+    When human chooses a plan from Agent A's set, increment A's preference weight.
+    Use decay_rate to forget old preferences over time (prevents lock-in).
+    """
+    global AGENT_PREFERENCE_WEIGHTS
+    
+    learning_config = policy.get("learning_config", {})
+    if not learning_config.get("enabled", False):
+        return
+    
+    if selected_agent_id not in AGENT_PREFERENCE_WEIGHTS:
+        return
+    
+    decay_rate = learning_config.get("decay_rate", 0.95)
+    learning_rate = learning_config.get("learning_rate", 0.15)
+    min_weight = learning_config.get("min_weight", 0.5)
+    max_weight = learning_config.get("max_weight", 1.5)
+    
+    # Decay all weights slightly (prevents lock-in)
+    for agent_id in AGENT_PREFERENCE_WEIGHTS:
+        AGENT_PREFERENCE_WEIGHTS[agent_id] = max(
+            min_weight,
+            AGENT_PREFERENCE_WEIGHTS[agent_id] * decay_rate
+        )
+    
+    # Boost selected agent
+    AGENT_PREFERENCE_WEIGHTS[selected_agent_id] = min(
+        max_weight,
+        AGENT_PREFERENCE_WEIGHTS[selected_agent_id] + learning_rate
+    )
+    
+    print(f"[LEARNING] Agent preference updated: {AGENT_PREFERENCE_WEIGHTS}")
+    
+    # Emit preference learning artifact
+    learning_event = {
+        "type": "preference_learning",
+        "selected_agent_id": selected_agent_id,
+        "preference_weights": {k: round(v, 3) for k, v in AGENT_PREFERENCE_WEIGHTS.items()},
+        "rationale": f"Human selected Agent {selected_agent_id}'s plan. Weights updated via outcome-aware calibration."
+    }
+    emit_event(learning_event)
 
 def prune_plans_by_policy(plan_set, policy):
     """Filter plans against policy safety rules and confidence thresholds.
@@ -290,6 +343,9 @@ Generate your best thinking. All plans will be evaluated independently.
 def negotiate_plan_sets(delegated_plan_sets, policy):
     """Synthesize insights from multiple sub-agents.
     
+    Phase 11.1: Uses learned agent preference weights to bias recommendations
+    without silencing other voices.
+    
     Compares plan sets and produces a meta-comparison artifact.
     No merging, no hidden compromises—just explicit comparison.
     """
@@ -300,10 +356,17 @@ def negotiate_plan_sets(delegated_plan_sets, policy):
     
     # Build comparison context
     agent_summaries = []
+    learning_config = policy.get("learning_config", {})
+    preferences_enabled = learning_config.get("enabled", False)
+    
     for agent_id, plan_set, ranking_breakdown, role in delegated_plan_sets:
+        # Phase 11.1: Include preference weight if learning is enabled
+        preference_weight = AGENT_PREFERENCE_WEIGHTS.get(agent_id, 1.0) if preferences_enabled else 1.0
+        
         summary = {
             "agent_id": agent_id,
             "agent_role": role,
+            "preference_weight": round(preference_weight, 3) if preferences_enabled else None,
             "top_plan_id": plan_set.get("plans", [{}])[0].get("plan_id") if plan_set.get("plans") else None,
             "top_plan_summary": plan_set.get("plans", [{}])[0].get("summary") if plan_set.get("plans") else None,
             "top_plan_confidence": plan_set.get("plans", [{}])[0].get("confidence") if plan_set.get("plans") else 0.0,
@@ -311,6 +374,17 @@ def negotiate_plan_sets(delegated_plan_sets, policy):
             "reasoning": plan_set.get("reasoning")
         }
         agent_summaries.append(summary)
+    
+    preference_context = ""
+    if preferences_enabled:
+        preference_context = f"""
+AGENT PREFERENCE WEIGHTS (from human selection history):
+{json.dumps({s['agent_id']: s['preference_weight'] for s in agent_summaries}, indent=2)}
+
+These weights reflect which agent framings humans have selected historically.
+Higher weight = human has previously preferred this agent's approach.
+Use these weights to bias your recommendation, but continue to surface all perspectives.
+"""
     
     prompt = f"""You are CT's meta-negotiation unit.
 Your task is to compare insights from 3 sub-agents with different perspectives:
@@ -320,6 +394,7 @@ Your task is to compare insights from 3 sub-agents with different perspectives:
 
 SUB-AGENT RECOMMENDATIONS:
 {json.dumps(agent_summaries, indent=2)}
+{preference_context}
 
 Analyze:
 1. Where do they agree? (consensus)
@@ -350,7 +425,7 @@ Output ONLY valid JSON:
       "confidence": 0.8
     }}
   ],
-  "meta_recommendation": "How to integrate these perspectives (2-3 sentences)",
+  "meta_recommendation": "How to integrate these perspectives (2-3 sentences). Consider learned preference weights if present.",
   "confidence": 0.0-1.0
 }}
 
@@ -358,6 +433,7 @@ Guidelines:
 - Show legitimate disagreement, don't hide it
 - Explain tradeoffs clearly
 - Value diversity of thinking
+- If preference weights are present, bias recommendation toward preferred agents but still surface all options
 - Do not attempt to merge plans or hide compromises
 - Output JSON only. No preamble or explanation.
 """
@@ -376,6 +452,22 @@ Guidelines:
         
         if response.status_code == 200:
             meta_comparison = json.loads(response.json().get("response"))
+            
+            # Phase 11.1: Attach preference context to artifact
+            if preferences_enabled:
+                meta_comparison["agent_preference_weights"] = {
+                    s['agent_id']: s['preference_weight'] 
+                    for s in agent_summaries
+                }
+                meta_comparison["preference_note"] = "Higher weight = human has historically preferred this agent's framing. All perspectives remain surfaced."
+            
+            # Emit to observer
+            emit_event({
+                "type": "meta_plan_comparison",
+                "timestamp": time.time(),
+                "artifact": meta_comparison
+            })
+            
             return meta_comparison
         else:
             print(f"[ORCHESTRATOR] Meta-negotiation LLM error: {response.status_code}")
@@ -842,7 +934,7 @@ def generate_execution_plan_set(artifact):
     Phase 11.0: If delegation is enabled, spawn sub-agents with different framings.
     Otherwise, use single-agent multi-plan generation.
     """
-    global HALTED, LAST_PLAN_SET, APPROVED_PLAN_ID
+    global HALTED, LAST_PLAN_SET, APPROVED_PLAN_ID, LAST_DELEGATED_AGENTS
     print(f"[ORCHESTRATOR] Generating multi-plan negotiation based on {artifact.get('type')}...")
     
     # Check if policy forbids planning
@@ -882,9 +974,17 @@ def generate_execution_plan_set(artifact):
             # Consolidate into single plan set for review
             # Use Agent A's top plan as the representative plan_set
             agent_a_set = delegated_plan_sets[0][1]  # First agent's plan_set
+            agent_a_id = delegated_plan_sets[0][0]   # Agent ID
             plan_set = agent_a_set.copy()
             LAST_PLAN_SET = plan_set
             APPROVED_PLAN_ID = None
+            
+            # Track which agent produced which plan (for learning)
+            LAST_DELEGATED_AGENTS = {}
+            for agent_id, agent_plan_set, _, _ in delegated_plan_sets:
+                for plan in agent_plan_set.get("plans", []):
+                    plan_id = plan.get("plan_id")
+                    LAST_DELEGATED_AGENTS[f"plan_{plan_id}_{agent_id}"] = agent_id
             
             # Generate review noting multi-agent input
             print("[ORCHESTRATOR] Generating review for delegated plan sets...")
@@ -1578,6 +1678,19 @@ while True:
                 
                 if selected_plan:
                     print(f"[ORCHESTRATOR] Executing approved plan: {APPROVED_PLAN_ID}")
+                    
+                    # Phase 11.1: Track which agent was selected for preference learning
+                    agent_selection_key = f"plan_{APPROVED_PLAN_ID}_*"
+                    selected_agent = None
+                    for key, agent_id in LAST_DELEGATED_AGENTS.items():
+                        if key.startswith(f"plan_{APPROVED_PLAN_ID}_"):
+                            selected_agent = agent_id
+                            break
+                    
+                    if selected_agent:
+                        print(f"[ORCHESTRATOR] Preference learning: User selected Agent {selected_agent}'s plan")
+                        update_agent_preference(selected_agent, POLICY)
+                    
                     # Convert selected plan to execution_plan format and set as CURRENT_PLAN
                     CURRENT_PLAN = {
                         "type": "execution_plan",
