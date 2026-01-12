@@ -20,7 +20,13 @@ INTENTS = [
     "summarise_logs",
     "analyze_code",
     "plan_action",
-    "apply_patch"
+    "apply_patch",
+    # Client-defined governance intents
+    "block_purchase",
+    "verify_account",
+    "require_mfa",
+    "flag_for_review",
+    "allow",
 ]
 
 MODE_TRANSITIONS = {
@@ -2176,25 +2182,20 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                 "completed_phases": COMPLETED_PHASES,
                 "skipped_phases": SKIPPED_PHASES,
                 "current_plan_id": CURRENT_PLAN.get("plan_id") if CURRENT_PLAN else None,
+                # Additional fields expected by validators
+                "active_plan_count": len(COMPOSED_PLAN_REGISTRY.get_executing()) if 'COMPOSED_PLAN_REGISTRY' in globals() else 0,
+                "pending_intent_count": len(INTENT_QUEUE.get_pending()) if INTENT_QUEUE else 0,
                 "timestamp": time.time()
             }
             self._send_json_response(200, response)
         
         elif self.path == "/governance/plans":
-            # Return multi-plan lifecycle info (pending, executing, completed)
+            # Return multi-plan lifecycle info (pending, approved, executing, completed)
             response = {
-                "current": {
-                    "plan_id": CURRENT_PLAN.get("plan_id") if CURRENT_PLAN else None,
-                    "state": "executing" if CURRENT_PLAN and not HALTED else "halted",
-                    "phases": CURRENT_PLAN.get("phases") if CURRENT_PLAN else []
-                },
-                "completed": [
-                    {
-                        "plan_id": pid,
-                        "outcome": PHASE_RESULTS.get(pid, {}).get("success", False)
-                    }
-                    for pid in COMPLETED_PHASES[:10]  # Last 10
-                ],
+                "pending": COMPOSED_PLAN_REGISTRY.get_pending() if 'COMPOSED_PLAN_REGISTRY' in globals() else [],
+                "approved": COMPOSED_PLAN_REGISTRY.get_approved() if 'COMPOSED_PLAN_REGISTRY' in globals() else [],
+                "executing": COMPOSED_PLAN_REGISTRY.get_executing() if 'COMPOSED_PLAN_REGISTRY' in globals() else [],
+                "completed": COMPOSED_PLAN_REGISTRY.get_completed() if 'COMPOSED_PLAN_REGISTRY' in globals() else [],
                 "timestamp": time.time()
             }
             self._send_json_response(200, response)
