@@ -6,6 +6,16 @@ import os
 HISTORY_FILE = "/data/ct_history.jsonl"
 
 class ObserverHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def do_POST(self):
         if self.path == "/log":
             content_length = int(self.headers['Content-Length'])
@@ -29,11 +39,6 @@ class ObserverHandler(http.server.BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(str(e).encode())
-        elif self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(b'{"status":"ok"}')
         else:
             self.send_response(404)
             self.end_headers()
