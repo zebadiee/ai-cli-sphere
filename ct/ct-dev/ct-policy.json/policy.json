@@ -31,6 +31,14 @@
     "learning_rate": 0.15,
     "min_weight": 0.5,
     "max_weight": 1.5
+  },
+  "phase_execution_config": {
+    "enabled": false,
+    "require_phase_approval": true,
+    "allow_phase_skipping": true,
+    "generate_phase_reviews": false,
+    "max_phases_per_plan": 5,
+    "rollback_notes_required": true
   }
 }
 

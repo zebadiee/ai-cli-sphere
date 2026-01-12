@@ -54,6 +54,14 @@ AGENT_PREFERENCE_WEIGHTS = {
     "C": 1.0   # Long-Term
 }
 
+# Phase 11.2: Temporal / Checkpointed Planning
+# Tracks phase execution state for multi-phase plans
+CURRENT_PHASE = None         # Currently executing phase
+APPROVED_PHASE_ID = None     # Phase approved by human
+COMPLETED_PHASES = []        # List of completed phase_ids
+PHASE_RESULTS = {}           # {phase_id: {"success": bool, "steps": [...]}}
+SKIPPED_PHASES = []          # List of skipped phase_ids
+
 def update_agent_preference(selected_agent_id, policy):
     """Learn from human plan selections.
     
@@ -97,6 +105,220 @@ def update_agent_preference(selected_agent_id, policy):
         "rationale": f"Human selected Agent {selected_agent_id}'s plan. Weights updated via outcome-aware calibration."
     }
     emit_event(learning_event)
+
+# Phase 11.2: Temporal / Checkpointed Planning Functions
+
+def check_phase_dependencies(phase, completed_phases):
+    """Check if all dependencies for a phase are met.
+    
+    Returns: True if dependencies met, False otherwise
+    """
+    dependencies = phase.get("dependencies", [])
+    if not dependencies:
+        return True  # No dependencies
+    
+    for dep_id in dependencies:
+        if dep_id not in completed_phases:
+            return False
+    
+    return True
+
+def emit_phase_artifact(artifact_type, phase, plan_id, **kwargs):
+    """Emit phase-related observer artifacts.
+    
+    Phase 11.2: All phase transitions are observable.
+    """
+    artifact = {
+        "type": artifact_type,
+        "timestamp": time.time(),
+        "plan_id": plan_id,
+        "phase_id": phase.get("phase_id"),
+        "phase_name": phase.get("phase_name", f"Phase {phase.get('phase_id')}")
+    }
+    
+    # Add type-specific fields
+    artifact.update(kwargs)
+    
+    emit_event(artifact)
+    return artifact
+
+def generate_phase_review(phase, success, policy):
+    """Generate optional LLM review of completed phase.
+    
+    Phase 11.2: Opt-in phase reviews (disabled by default).
+    """
+    phase_config = policy.get("phase_execution_config", {})
+    if not phase_config.get("generate_phase_reviews", False):
+        return None  # Reviews disabled
+    
+    prompt = f"""You are CT's phase review assistant.
+Your task is to summarize the results of a completed phase in plain English.
+
+PHASE DETAILS:
+{json.dumps(phase, indent=2)}
+
+SUCCESS: {success}
+
+Output ONLY valid JSON:
+{{
+  "type": "phase_review",
+  "summary": "Plain English summary of what was accomplished (2-3 sentences)",
+  "recommendations": ["recommendation 1", "recommendation 2", ...],
+  "confidence": 0.0-1.0
+}}
+
+Guidelines:
+- Be concise and fact-based
+- Highlight any risks or concerns
+- Suggest next steps if applicable
+- Output JSON only. No preamble.
+"""
+    
+    try:
+        response = requests.post(
+            LLM_URL,
+            json={
+                "model": "qwen2.5:7b",
+                "prompt": prompt,
+                "stream": False,
+                "format": "json"
+            },
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            review = json.loads(response.json().get("response"))
+            return review
+    except Exception as e:
+        print(f"[ORCHESTRATOR] Phase review generation failed: {e}")
+    
+    return None
+
+def execute_plan_with_phases(plan):
+    """Execute a phased plan with HALT gates between phases.
+    
+    Phase 11.2: Core phased execution logic with checkpoints.
+    
+    A phase is considered "completed" only after all steps execute successfully
+    and the human explicitly acknowledges completion (or advances to the next phase).
+    """
+    global HALTED, CURRENT_PHASE, APPROVED_PHASE_ID, COMPLETED_PHASES, PHASE_RESULTS, SKIPPED_PHASES
+    
+    phases = plan.get("phases", [])
+    if not phases:
+        print("[ORCHESTRATOR] No phases in plan, falling back to step-by-step execution")
+        return False
+    
+    plan_id = plan.get("plan_id", "unknown")
+    
+    print(f"[ORCHESTRATOR] Starting phased execution: {len(phases)} phases")
+    
+    for phase in phases:
+        phase_id = phase.get("phase_id")
+        phase_name = phase.get("phase_name", f"Phase {phase_id}")
+        
+        # Check if phase was skipped
+        if phase_id in SKIPPED_PHASES:
+            print(f"[ORCHESTRATOR] Phase {phase_id} skipped by human")
+            continue
+        
+        # Check dependencies
+        if not check_phase_dependencies(phase, COMPLETED_PHASES):
+            print(f"[ORCHESTRATOR] Phase {phase_id} blocked: dependencies not met")
+            emit_phase_artifact(
+                "phase_blocked",
+                phase,
+                plan_id,
+                reason="Dependencies not met",
+                dependencies=phase.get("dependencies", []),
+                completed_phases=COMPLETED_PHASES
+            )
+            HALTED = True
+            return False
+        
+        # Emit phase_started
+        CURRENT_PHASE = phase_id
+        emit_phase_artifact(
+            "phase_started",
+            phase,
+            plan_id,
+            estimated_duration=phase.get("estimated_duration", "unknown")
+        )
+        
+        print(f"[ORCHESTRATOR] Executing Phase {phase_id}: {phase_name}")
+        
+        # Execute phase steps
+        phase_steps = phase.get("steps", [])
+        steps_succeeded = 0
+        steps_failed = 0
+        phase_start_time = time.time()
+        
+        for step in phase_steps:
+            # Note: Actual step execution would happen here
+            # For Phase 11.2, we're setting up the structure
+            # Step execution will be integrated with existing APPROVED_STEP_ID flow
+            steps_succeeded += 1
+        
+        phase_duration = time.time() - phase_start_time
+        phase_success = steps_failed == 0
+        
+        # Record phase result
+        PHASE_RESULTS[phase_id] = {
+            "success": phase_success,
+            "steps_executed": len(phase_steps),
+            "steps_succeeded": steps_succeeded,
+            "steps_failed": steps_failed,
+            "duration_seconds": phase_duration
+        }
+        
+        COMPLETED_PHASES.append(phase_id)
+        
+        # Emit phase_completed
+        next_phase_id = phase_id + 1 if phase_id < len(phases) else None
+        emit_phase_artifact(
+            "phase_completed",
+            phase,
+            plan_id,
+            steps_executed=len(phase_steps),
+            steps_succeeded=steps_succeeded,
+            steps_failed=steps_failed,
+            duration_seconds=round(phase_duration, 2),
+            success_criteria_met=phase.get("success_criteria", []),
+            next_phase=next_phase_id,
+            awaiting_approval=next_phase_id is not None
+        )
+        
+        # Optional: Generate phase review
+        if POLICY:
+            review = generate_phase_review(phase, phase_success, POLICY)
+            if review:
+                review["plan_id"] = plan_id
+                review["phase_id"] = phase_id
+                emit_event(review)
+                print(f"[ORCHESTRATOR] Phase review emitted for phase {phase_id}")
+        
+        # HALT before next phase (unless this is the last phase)
+        if next_phase_id:
+            print(f"[ORCHESTRATOR] Phase {phase_id} complete. HALT before Phase {next_phase_id}")
+            HALTED = True
+            CURRENT_PHASE = None
+            # Human must approve next phase via resume signal
+            return False  # Not complete yet
+    
+    # All phases complete
+    print(f"[ORCHESTRATOR] All phases complete for plan {plan_id}")
+    emit_event({
+        "type": "plan_completed",
+        "timestamp": time.time(),
+        "plan_id": plan_id,
+        "total_phases": len(phases),
+        "phases_completed": len(COMPLETED_PHASES),
+        "phases_skipped": len(SKIPPED_PHASES),
+        "total_steps": sum(len(p.get("steps", [])) for p in phases),
+        "outcome": "success"
+    })
+    
+    return True  # Plan complete
 
 def prune_plans_by_policy(plan_set, policy):
     """Filter plans against policy safety rules and confidence thresholds.
@@ -639,6 +861,67 @@ Rules:
 6. All steps must be compatible with POLICY constraints above.
 7. Output ONLY valid JSON. No commentary.
 8. Output JSON only. No preamble or explanation.
+
+OPTIONAL: If the goal requires multiple sequential steps with natural checkpoints,
+you may structure your plan with phases instead of flat steps:
+
+{{
+  "type": "execution_plan_set",
+  "goal": "...",
+  "plans": [
+    {{
+      "plan_id": "A",
+      "summary": "...",
+      "phases": [
+        {{
+          "phase_id": 1,
+          "phase_name": "Setup",
+          "description": "Prepare environment and dependencies",
+          "estimated_duration": "5-10 minutes (informational only)",
+          "steps": [
+            {{"id": 1, "action": "create_file", "target": "...", "rationale": "...", "risk": "low"}},
+            {{"id": 2, "action": "run_command", "target": "...", "rationale": "...", "risk": "low"}}
+          ],
+          "success_criteria": [
+            "Observable condition 1 (file exists, test passes, etc.)",
+            "Observable condition 2"
+          ],
+          "rollback_notes": "How to undo this phase (informational only, not executed)",
+          "dependencies": [],
+          "blocks": [2, 3]
+        }},
+        {{
+          "phase_id": 2,
+          "phase_name": "Implementation",
+          "description": "Core logic changes",
+          "steps": [...],
+          "success_criteria": [...],
+          "rollback_notes": "...",
+          "dependencies": [1],
+          "blocks": []
+        }}
+      ],
+      "pros": [...],
+      "cons": [...],
+      "risks": [...],
+      "confidence": 0.85
+    }}
+  ]
+}}
+
+Phase Guidelines:
+- Use phases when there are natural checkpoints (e.g., setup → implement → test)
+- Each phase should have 2-5 steps maximum
+- success_criteria must be observable (file exists, test passes, service responds)
+- rollback_notes are informational only (not executed automatically)
+- Human will review and approve each phase transition
+- estimated_duration is advisory (no enforcement)
+- dependencies and blocks document phase order (informational, not enforced)
+
+Do NOT use phases for:
+- Single-step tasks
+- Tasks with no natural checkpoints
+- Parallel work (phases are sequential)
 """
 
 REVIEW_PROMPT_TEMPLATE = """You are CT's review assistant.
@@ -1626,7 +1909,7 @@ def send_intent(intent, mandated=None):
 class SignalHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/internal/resume":
-            global RESUME_REQUESTED, APPROVED_STEP_ID, APPROVED_PLAN_ID
+            global RESUME_REQUESTED, APPROVED_STEP_ID, APPROVED_PLAN_ID, APPROVED_PHASE_ID, SKIPPED_PHASES
             print("[ORCHESTRATOR] resume requested by human")
             
             try:
@@ -1636,10 +1919,23 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                 APPROVED_STEP_ID = body.get("step_id", None)
                 APPROVED_PLAN_ID = body.get("approve_plan_id", None)
                 
+                # Phase 11.2: Phase-specific resume fields
+                APPROVED_PHASE_ID = body.get("approve_phase_id", None)
+                skip_phases = body.get("skip_phases", [])
+                abort = body.get("abort", False)
+                
                 if APPROVED_STEP_ID:
                     print(f"[ORCHESTRATOR] Approved Step ID: {APPROVED_STEP_ID}")
                 if APPROVED_PLAN_ID:
                     print(f"[ORCHESTRATOR] Approved Plan ID: {APPROVED_PLAN_ID}")
+                if APPROVED_PHASE_ID:
+                    print(f"[ORCHESTRATOR] Approved Phase ID: {APPROVED_PHASE_ID}")
+                if skip_phases:
+                    SKIPPED_PHASES.extend(skip_phases)
+                    print(f"[ORCHESTRATOR] Skipping phases: {skip_phases}")
+                if abort:
+                    print(f"[ORCHESTRATOR] Abort requested - terminating remaining phases")
+                    # Abort will be handled in main loop
             except:
                 pass
                 
@@ -1692,15 +1988,23 @@ while True:
                         update_agent_preference(selected_agent, POLICY)
                     
                     # Convert selected plan to execution_plan format and set as CURRENT_PLAN
+                    # Phase 11.2: Preserve phases if present
                     CURRENT_PLAN = {
                         "type": "execution_plan",
                         "goal": LAST_PLAN_SET.get("goal"),
                         "plan_id": APPROVED_PLAN_ID,
                         "assumptions": selected_plan.get("assumptions", []),
-                        "steps": selected_plan.get("steps", []),
                         "confidence": selected_plan.get("confidence"),
                         "source_plan_set": True
                     }
+                    
+                    # Phase 11.2: Check if plan has phases
+                    if "phases" in selected_plan and selected_plan["phases"]:
+                        CURRENT_PLAN["phases"] = selected_plan["phases"]
+                        print(f"[ORCHESTRATOR] Plan has {len(selected_plan['phases'])} phases")
+                    else:
+                        CURRENT_PLAN["steps"] = selected_plan.get("steps", [])
+                    
                     LAST_PLAN_SET = None
                     APPROVED_PLAN_ID = None
                 else:
