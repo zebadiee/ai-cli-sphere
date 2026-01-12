@@ -78,13 +78,16 @@ class IntentResponse:
     
     @classmethod
     def from_dict(cls, data: Dict) -> "IntentResponse":
-        return cls(
+        obj = cls(
             status=data.get("status", "unknown"),
             intent_id=data.get("intent_id"),
             composed_plan_id=data.get("composed_plan_id"),
             message=data.get("message", ""),
             timestamp=data.get("timestamp", time.time())
         )
+        # Provide compatibility alias expected by validation harness
+        setattr(obj, 'id', obj.intent_id)
+        return obj
 
 
 @dataclass

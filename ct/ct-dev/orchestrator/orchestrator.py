@@ -2252,7 +2252,7 @@ class SignalHandler(http.server.BaseHTTPRequestHandler):
                 }
                 
                 self._send_json_response(
-                    200 if validation_result["status"] == "accepted" else 400,
+                    200 if validation_result["status"] == "accepted" else 422,
                     validation_result
                 )
             except json.JSONDecodeError:
