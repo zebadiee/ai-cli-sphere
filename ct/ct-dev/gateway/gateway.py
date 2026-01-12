@@ -17,6 +17,28 @@ class GatewayHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        if self.path == "/intent":
+            # Proxy intent submissions to orchestrator (thin gateway, no business logic)
+            try:
+                content_length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(content_length) if content_length > 0 else b""
+
+                resp = requests.post("http://ct-orchestrator:9001/intent",
+                                     data=body,
+                                     headers={"Content-Type": self.headers.get("Content-Type", "application/json")},
+                                     timeout=5)
+
+                self.send_response(resp.status_code)
+                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                self.end_headers()
+                self.wfile.write(resp.content)
+                return
+            except Exception as e:
+                self.send_response(502)
+                self.end_headers()
+                self.wfile.write(f"Gateway proxy error: {str(e)}".encode())
+                return
+
         if self.path == "/resume":
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length)
