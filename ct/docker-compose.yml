@@ -2,8 +2,9 @@ services:
   gateway:
     build: ./ct-dev/gateway
     container_name: ct-gateway
+    # Expose gateway on host port 9001 for integration tests (maps to container 8080)
     ports:
-      - "8000:8080"
+      - "9001:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8080/health'); sys.exit(0 if r.getcode()==200 else 1)"]
@@ -15,8 +16,9 @@ services:
   orchestrator:
     build: ./ct-dev/orchestrator
     container_name: ct-orchestrator
+    # Expose orchestrator on host port 9002; gateway is authoritative on 9001
     ports:
-      - "9001:9001"
+      - "9002:9001"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:9001/health'); sys.exit(0 if r.getcode()==200 else 1)"]
