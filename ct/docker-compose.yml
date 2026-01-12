@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  gateway:
+    build: ./ct-dev/gateway
+    container_name: ct-gateway
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  orchestrator:
+    build: ./ct-dev/orchestrator
+    container_name: ct-orchestrator
+    ports:
+      - "9001:9001"
+    restart: unless-stopped
+
+  observer:
+    build: ./ct-dev/observer
+    container_name: ct-observer
+    restart: unless-stopped
+
+  mock-tool:
+    build: ./ct-dev/mock-tool
+    container_name: ct-mock-tool
+    restart: unless-stopped
