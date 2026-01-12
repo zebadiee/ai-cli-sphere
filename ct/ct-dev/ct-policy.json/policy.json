@@ -33,7 +33,7 @@
     "max_weight": 1.5
   },
   "phase_execution_config": {
-    "enabled": false,
+    "enabled": true,
     "require_phase_approval": true,
     "allow_phase_skipping": true,
     "generate_phase_reviews": false,

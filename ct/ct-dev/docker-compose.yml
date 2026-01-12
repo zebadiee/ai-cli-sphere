@@ -34,7 +34,7 @@ services:
     profiles: [ "dev", "action" ]
     volumes:
       - ./ct-intent.schema.json:/app/ct-intent.schema.json:ro
-      - ./ct-policy.json:/app/ct-policy.json:ro
+      - ./ct-policy.json/policy.json:/app/ct-policy.json:ro
       - ct-history:/data:ro
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9001/health" ]
