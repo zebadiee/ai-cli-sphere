@@ -265,24 +265,26 @@ class PermissionChecker:
         
         Returns: (is_allowed, reason)
         """
-        
+        # Normalize path (strip query string)
+        path = path.split('?', 1)[0]
+
         # Deny forbidden methods
         if method in self.FORBIDDEN_METHODS:
             return False, f"Method {method} not allowed (no data mutation)"
-        
+
         # Deny forbidden paths
         for forbidden_path in self.FORBIDDEN_PATHS:
             if path.startswith(forbidden_path):
                 return False, f"Path {path} is internal only"
-        
+
         # Allow only whitelisted endpoints
         # Note: /governance/plans/{plan_id} matches both /governance/plans/xxx
         if method == "GET" and path.startswith("/governance/plans/"):
             return True, "Allowed (plan detail endpoint)"
-        
+
         if (method, path) in self.ALLOWED_ENDPOINTS:
             return True, "Allowed"
-        
+
         return False, f"Operation {method} {path} not allowed"
 
 

@@ -89,10 +89,16 @@ class GatewayHandler(http.server.BaseHTTPRequestHandler):
 
             # Proxy intent submissions to orchestrator (thin gateway, no business logic)
             try:
-                body = self.rfile.read(content_length) if content_length > 0 else b""
+                body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+                body = json.loads(body_bytes) if body_bytes else {}
 
+                # Normalize: map client 'target' -> orchestrator 'source' if missing
+                if 'source' not in body and 'target' in body:
+                    body['source'] = body['target']
+
+                # Forward as JSON
                 resp = requests.post("http://ct-orchestrator:9001/intent",
-                                     data=body,
+                                     json=body,
                                      headers={"Content-Type": self.headers.get("Content-Type", "application/json"), 'Authorization': auth},
                                      timeout=5)
 
