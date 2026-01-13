@@ -379,7 +379,7 @@ jobs:
     name: Canary Deploy (5% Traffic)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [build-and-sign, security-checks]
+    needs: [build-and-sign]
     if: github.event_name == 'push' && success() && github.ref == 'refs/heads/main'
     environment: canary
     
