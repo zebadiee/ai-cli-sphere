@@ -1,0 +1,44 @@
+{
+  "global_policies": [
+    {
+      "id": "planning_allowed",
+      "rule": "Planning is allowed in all modes",
+      "severity": "soft"
+    }
+  ],
+  "pruning_config": {
+    "min_plan_confidence": 0.75,
+    "allow_write": false,
+    "require_stepwise_approval": true
+  },
+  "plan_safety_rules": {
+    "forbidden_actions": [],
+    "sandbox_only_actions": ["apply_patch"]
+  },
+  "ranking_config": {
+    "enable": true,
+    "policy_friction_penalty": 0.05,
+    "history_success_bonus": 0.05
+  },
+  "delegation_config": {
+    "enabled": false,
+    "agent_count": 3,
+    "max_agents": 5
+  },
+  "learning_config": {
+    "enabled": false,
+    "decay_rate": 0.95,
+    "learning_rate": 0.15,
+    "min_weight": 0.5,
+    "max_weight": 1.5
+  },
+  "phase_execution_config": {
+    "enabled": true,
+    "require_phase_approval": true,
+    "allow_phase_skipping": true,
+    "generate_phase_reviews": false,
+    "max_phases_per_plan": 5,
+    "rollback_notes_required": true
+  }
+}
+

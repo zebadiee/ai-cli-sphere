@@ -1,0 +1,5 @@
+NAME              IMAGE             COMMAND                  SERVICE        CREATED         STATUS         PORTS
+ct-gateway        ct-gateway        "python gateway.py"      gateway        3 minutes ago   Up 3 minutes   0.0.0.0:8000->8080/tcp, [::]:8000->8080/tcp
+ct-mock-tool      ct-mock-tool      "python /app/mock_to…"   mock-tool      3 minutes ago   Up 3 minutes   
+ct-observer       ct-observer       "python observer.py"     observer       3 minutes ago   Up 3 minutes   
+ct-orchestrator   ct-orchestrator   "python /app/orchest…"   orchestrator   3 minutes ago   Up 3 minutes   0.0.0.0:9001->9001/tcp, [::]:9001->9001/tcp

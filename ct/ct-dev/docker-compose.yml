@@ -1,0 +1,122 @@
+services:
+  ct-gateway:
+    build: ./gateway
+    platform: linux/arm64
+    container_name: ct-gateway
+    ports:
+      - "8080:8080"
+    networks: [ ct-net ]
+    read_only: true
+    security_opt: [ no-new-privileges:true ]
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles: [ "dev", "action" ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+    depends_on:
+      ct-llm:
+        condition: service_healthy
+
+  ct-orchestrator:
+    build: ./orchestrator
+    platform: linux/arm64
+    container_name: ct-orchestrator
+    ports:
+      - "9001:9001"
+    read_only: true
+    networks: [ ct-net ]
+    security_opt: [ no-new-privileges:true ]
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles: [ "dev", "action" ]
+    volumes:
+      - ./ct-intent.schema.json:/app/ct-intent.schema.json:ro
+      - ./ct-policy.json/policy.json:/app/ct-policy.json:ro
+      - ct-history:/data:ro
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9001/health" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+    depends_on:
+      ct-llm:
+        condition: service_healthy
+
+  ct-mock-tool:
+    build: ./mock-tool
+    platform: linux/arm64
+    container_name: ct-mock-tool
+    read_only: true
+    networks: [ ct-net ]
+    security_opt: [ no-new-privileges:true ]
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles: [ "dev", "action" ]
+    volumes:
+      - ./ct-intent.schema.json:/app/ct-intent.schema.json:ro
+
+  ct-observer:
+    build: ./observer
+    platform: linux/arm64
+    container_name: ct-observer
+    networks: [ ct-net ]
+    volumes:
+      - ct-history:/data
+    security_opt: [ no-new-privileges:true ]
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles: [ "dev", "action" ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9002/health" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+
+  ct-llm:
+    image: ollama/ollama:latest
+    platform: linux/arm64
+    container_name: ct-llm
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks: [ ct-net ]
+    security_opt: [ no-new-privileges:true ]
+    command: [ "serve" ]
+    profiles: [ "dev", "action" ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+
+  ct-action:
+    build: ./action
+    platform: linux/arm64
+    container_name: ct-action
+    networks: [ ct-net ]
+    volumes:
+      - /Users/dadhoosband/.gemini/antigravity/scratch/nebula:/repo:ro
+    security_opt: [ no-new-privileges:true ]
+    environment:
+      - PYTHONUNBUFFERED=1
+    profiles: [ "action" ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9003/health" ]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+    depends_on:
+      ct-llm:
+        condition: service_healthy
+
+networks:
+  ct-net:
+    driver: bridge
+
+volumes:
+  ollama-data:
+  ct-history:

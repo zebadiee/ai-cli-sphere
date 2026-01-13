@@ -1,0 +1,2 @@
+ct-llm	Up 9 hours (unhealthy)	ollama/ollama:latest
+ct-action	Up 11 hours	ct-dev-ct-action

@@ -1,0 +1,5 @@
+.env.prod
+*.pyc
+__pycache__/
+venv/
+.ct_build/

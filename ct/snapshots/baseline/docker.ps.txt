@@ -1,0 +1,6 @@
+ct-observer	Up 3 minutes	ct-observer
+ct-orchestrator	Up 3 minutes	ct-orchestrator
+ct-mock-tool	Up 3 minutes	ct-mock-tool
+ct-gateway	Up 3 minutes	ct-gateway
+ct-llm	Up 9 hours (unhealthy)	ollama/ollama:latest
+ct-action	Up 11 hours	ct-dev-ct-action
