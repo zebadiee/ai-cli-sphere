@@ -378,7 +378,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: build-and-sign
-    if: github.event_name == 'push' && success()
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
     
     steps:
       - name: Checkout code
