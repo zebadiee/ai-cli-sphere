@@ -49,9 +49,10 @@ jobs:
       run: |
         python smoke_test.py
   
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
+security:
+  name: Security Scan
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/main'
     
     steps:
     - name: Checkout code
@@ -75,13 +76,6 @@ jobs:
       run: |
         safety check --json || true
     
-    - name: Upload security reports
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
   
   docker:
     name: Build Docker Image
