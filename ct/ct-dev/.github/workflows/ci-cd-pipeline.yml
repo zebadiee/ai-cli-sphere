@@ -385,11 +385,10 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@v1
-        with:
-          image-ref: ${{ needs.build-and-sign.outputs.image-url }}
-          format: sarif
-          output: trivy-results.sarif
+        run: |
+          # Install Trivy (official install script) and run it directly to avoid pulling action dependencies
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+          trivy image --format sarif --output trivy-results.sarif ${{ needs.build-and-sign.outputs.image-url }}
       
       - name: Upload scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
