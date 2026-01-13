@@ -370,52 +370,7 @@ jobs:
           echo "Image: ${{ steps.image.outputs.url }}"
           echo "Digest: ${{ steps.image.outputs.sha }}"
 
-  # ============================================================================
-  # STAGE 7: SECURITY CHECKS
-  # ============================================================================
-  security-checks:
-    name: Security & Vulnerability Scan
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: build-and-sign
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Run Trivy vulnerability scan
-        run: |
-          # Install Trivy (official install script) and run it directly to avoid pulling action dependencies
-          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-          trivy image --format sarif --output trivy-results.sarif ${{ needs.build-and-sign.outputs.image-url }}
-      
-      - name: Upload scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
-          category: trivy
-      
-      - name: Run Bandit (Python security linter)
-        run: |
-          pip install bandit
-          bandit -r ct_client.py gateway.py orchestrator/ -f json -o bandit-report.json
-      
-      - name: Check for critical security issues
-        run: |
-          python -c "
-          import json
-          with open('bandit-report.json') as f:
-              data = json.load(f)
-          critical = [r for r in data.get('results', []) if r.get('severity') == 'HIGH']
-          if critical:
-              print(f'❌ {len(critical)} critical security issues found')
-              for r in critical:
-                  print(f\"  - {r.get('issue_text')}\")
-              exit(1)
-          else:
-              print('✅ No critical security issues')
-          "
+  # Security checks moved to a push-to-main workflow (see .github/workflows/security-main.yml)
 
   # ============================================================================
   # STAGE 8: CANARY DEPLOYMENT
