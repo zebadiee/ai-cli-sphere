@@ -6,3 +6,10 @@ pandas>=2.0.0
 
 # Optional dependencies for extended functionality
 # tiktoken>=0.5.0  # For more accurate token counting
+
+# ECIR Studio dependencies
+weasyprint>=60.0  # PDF generation from HTML/CSS
+Pillow>=10.0.0  # Image processing
+pyyaml>=6.0  # YAML parsing for contracts
+click>=8.0.0  # CLI framework
+jsonschema>=4.0.0  # JSON schema validation

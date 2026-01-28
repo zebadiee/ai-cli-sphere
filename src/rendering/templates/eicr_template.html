@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electrical Installation Condition Report</title>
+</head>
+<body>
+    <!-- Page 1 -->
+    <div class="page">
+        <div class="header">
+            <h1>ELECTRICAL INSTALLATION CONDITION REPORT</h1>
+            <div class="header-info">
+                <p><strong>Report Number:</strong> {{report_id}}</p>
+                <p><strong>Date of Inspection:</strong> {{date_of_inspection}}</p>
+            </div>
+        </div>
+        
+        <!-- Section A -->
+        <div class="section">
+            <h2>SECTION A: Details of the person ordering the report</h2>
+            <div class="form-field">
+                <label>Name:</label>
+                <div class="field-value">{{client_name}}</div>
+            </div>
+            <div class="form-field">
+                <label>Address:</label>
+                <div class="field-value">{{client_address}}</div>
+            </div>
+            <div class="form-field">
+                <label>Purpose of report:</label>
+                <div class="field-value">{{purpose_of_report}}</div>
+            </div>
+        </div>
+        
+        <!-- Section B -->
+        <div class="section">
+            <h2>SECTION B: Reason for producing this report</h2>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <span class="checkbox">☐</span> Change of occupancy
+                </div>
+                <div class="checkbox-item">
+                    <span class="checkbox">☐</span> Change of use
+                </div>
+                <div class="checkbox-item">
+                    <span class="checkbox">☐</span> Periodic inspection
+                </div>
+                <div class="checkbox-item">
+                    <span class="checkbox">☐</span> Previous inspection recommendations
+                </div>
+                <div class="checkbox-item">
+                    <span class="checkbox">☐</span> Other (specify): <span class="underline">_________________</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section C -->
+        <div class="section">
+            <h2>SECTION C: Details of the installation</h2>
+            <div class="form-field">
+                <label>Occupier:</label>
+                <div class="field-value">{{occupier}}</div>
+            </div>
+            <div class="form-field">
+                <label>Installation address:</label>
+                <div class="field-value">{{installation_address}}</div>
+            </div>
+            <div class="form-field">
+                <label>Type of installation:</label>
+                <div class="field-value">{{type_of_installation}}</div>
+            </div>
+            <div class="form-field">
+                <label>Estimated age:</label>
+                <div class="field-value">{{estimated_age}}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Page 2 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 2</span></p>
+        </div>
+        
+        <!-- Section D -->
+        <div class="section">
+            <h2>SECTION D: Extent and limitations of the inspection</h2>
+            <div class="form-field">
+                <label>Extent of inspection:</label>
+                <div class="field-value">{{extent_of_inspection}}</div>
+            </div>
+            <div class="form-field">
+                <label>Percentage of installation inspected:</label>
+                <div class="field-value">{{percentage_inspected}}%</div>
+            </div>
+            <div class="form-field">
+                <label>Limitations:</label>
+                <div class="field-value"></div>
+            </div>
+        </div>
+        
+        <!-- Section E -->
+        <div class="section">
+            <h2>SECTION E: Summary of the condition of the installation</h2>
+            <div class="form-field">
+                <label>General condition of the installation (in terms of electrical safety):</label>
+                <div class="field-value multiline">{{general_condition}}</div>
+            </div>
+            <div class="form-field">
+                <label>Overall assessment of the installation in terms of its suitability for continued use:</label>
+                <div class="radio-group">
+                    <div class="radio-item">
+                        <span class="radio">○</span> SATISFACTORY
+                    </div>
+                    <div class="radio-item">
+                        <span class="radio">○</span> UNSATISFACTORY
+                    </div>
+                </div>
+                <p class="note"><em>*An unsatisfactory assessment indicates that dangerous (code C1) and/or potentially dangerous (code C2) conditions have been identified.</em></p>
+            </div>
+        </div>
+        
+        <!-- Section F -->
+        <div class="section">
+            <h2>SECTION F: Recommendations</h2>
+            <div class="recommendations">
+                {{recommendations_list}}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Page 3 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 3</span></p>
+        </div>
+        
+        <!-- Section G -->
+        <div class="section">
+            <h2>SECTION G: Declaration</h2>
+            <p class="declaration-text">
+                I/We certify that the installation has been inspected and tested and that the results are recorded in this report.
+            </p>
+            <div class="form-field">
+                <label>Inspector name:</label>
+                <div class="field-value">{{inspector_name}}</div>
+            </div>
+            <div class="form-field">
+                <label>Position:</label>
+                <div class="field-value">{{inspector_position}}</div>
+            </div>
+            <div class="form-field">
+                <label>Date:</label>
+                <div class="field-value">{{date_of_inspection}}</div>
+            </div>
+            <div class="form-field">
+                <label>Signature:</label>
+                <div class="field-value signature">{{signature}}</div>
+            </div>
+            <div class="form-field">
+                <label>Next inspection recommended:</label>
+                <div class="field-value">{{next_inspection_date}}</div>
+            </div>
+        </div>
+        
+        <!-- Section H -->
+        <div class="section">
+            <h2>SECTION H: Schedule of items inspected</h2>
+            <p>See attached Condition Report Inspection Schedule</p>
+        </div>
+    </div>
+    
+    <!-- Page 4 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 4</span></p>
+        </div>
+        
+        <!-- Section I -->
+        <div class="section">
+            <h2>SECTION I: Supply characteristics and earthing arrangements</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label>Supply type:</label>
+                    <div class="field-value">_________________</div>
+                </div>
+                <div class="form-field">
+                    <label>Voltage (V):</label>
+                    <div class="field-value">_________________</div>
+                </div>
+                <div class="form-field">
+                    <label>Frequency (Hz):</label>
+                    <div class="field-value">_________________</div>
+                </div>
+                <div class="form-field">
+                    <label>Prospective fault current (kA):</label>
+                    <div class="field-value">_________________</div>
+                </div>
+                <div class="form-field">
+                    <label>External loop impedance (Ω):</label>
+                    <div class="field-value">_________________</div>
+                </div>
+                <div class="form-field">
+                    <label>Earthing arrangements:</label>
+                    <div class="field-value">_________________</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section J -->
+        <div class="section">
+            <h2>SECTION J: Particulars of the installation</h2>
+            <div class="form-field">
+                <label>Means of earthing:</label>
+                <div class="field-value">_________________</div>
+            </div>
+            <div class="form-field">
+                <label>Main protective conductors:</label>
+                <div class="field-value">_________________</div>
+            </div>
+            <div class="form-field">
+                <label>Main switch rating (A):</label>
+                <div class="field-value">_________________</div>
+            </div>
+            <div class="form-field">
+                <label>RCD details:</label>
+                <div class="field-value">_________________</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Page 5 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 5</span></p>
+        </div>
+        
+        <!-- Section K -->
+        <div class="section">
+            <h2>SECTION K: Observations and recommendations for actions to be taken</h2>
+            <p class="note"><em>List observations and recommendations for improvement, including reference to relevant regulation number.</em></p>
+            <div class="observations">
+                {{observations_list}}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Page 6 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 6</span></p>
+        </div>
+        
+        <div class="section">
+            <h2>SCHEDULE OF CIRCUIT DETAILS</h2>
+            {{circuit_details_table}}
+        </div>
+    </div>
+    
+    <!-- Page 7 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 7</span></p>
+        </div>
+        
+        <div class="section">
+            <h2>SCHEDULE OF TEST RESULTS</h2>
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Circuit</th>
+                        <th>Continuity</th>
+                        <th>Insulation Resistance</th>
+                        <th>Polarity</th>
+                        <th>Earth Fault Loop</th>
+                        <th>RCD Test</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+                    <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+                    <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Page 8 -->
+    <div class="page">
+        <div class="header">
+            <p><strong>Report Number:</strong> {{report_id}} <span class="page-number">Page 8</span></p>
+        </div>
+        
+        <div class="section">
+            <h2>CONDITION REPORT INSPECTION SCHEDULE</h2>
+            <p class="note"><em>Check items inspected: ✓ = Checked and acceptable, X = Not acceptable, N/A = Not applicable, LIM = Limitation</em></p>
+            
+            <table class="inspection-schedule">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Description</th>
+                        <th>✓</th>
+                        <th>X</th>
+                        <th>N/A</th>
+                        <th>LIM</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="section-header">
+                        <td colspan="6"><strong>1.0 EARTHING AND BONDING</strong></td>
+                    </tr>
+                    <tr>
+                        <td>1.1</td>
+                        <td>Earthing conductor</td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                    </tr>
+                    <tr>
+                        <td>1.2</td>
+                        <td>Main protective bonding conductors</td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                    </tr>
+                    <tr class="section-header">
+                        <td colspan="6"><strong>2.0 PARALLEL OR SWITCHED ALTERNATIVE SOURCES</strong></td>
+                    </tr>
+                    <tr>
+                        <td>2.1</td>
+                        <td>Adequate arrangements</td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                    </tr>
+                    <tr class="section-header">
+                        <td colspan="6"><strong>3.0 AUTO DISCONNECTION OF SUPPLY</strong></td>
+                    </tr>
+                    <tr>
+                        <td>3.1</td>
+                        <td>Presence and condition of RCDs</td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                    </tr>
+                    <tr class="section-header">
+                        <td colspan="6"><strong>4.0 BASIC PROTECTION</strong></td>
+                    </tr>
+                    <tr>
+                        <td>4.1</td>
+                        <td>Enclosures and barriers</td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                    </tr>
+                    <tr class="section-header">
+                        <td colspan="6"><strong>5.0 ADDITIONAL PROTECTION</strong></td>
+                    </tr>
+                    <tr>
+                        <td>5.1</td>
+                        <td>RCD protection for socket-outlets</td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                        <td><span class="checkbox">☐</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>End of Report</p>
+    </div>
+</body>
+</html>

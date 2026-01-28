@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Electrical Installation Condition Report (EICR)",
+  "description": "Schema for EICR form data - machine truth",
+  "type": "object",
+  "required": ["report_id", "sections"],
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "pattern": "^EICR-[0-9]{4}-[0-9]{3}$",
+      "description": "Unique report identifier"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sections": {
+      "type": "object",
+      "properties": {
+        "section_a": {
+          "type": "object",
+          "title": "Details of the person ordering the report",
+          "properties": {
+            "client_name": {"type": "string"},
+            "client_address": {"type": "string"},
+            "purpose_of_report": {"type": "string"}
+          }
+        },
+        "section_b": {
+          "type": "object",
+          "title": "Reason for producing this report",
+          "properties": {
+            "reason": {"type": "string", "enum": ["change_of_occupancy", "change_of_use", "periodic_inspection", "previous_inspection_recommendations", "other"]},
+            "other_reason": {"type": "string"}
+          }
+        },
+        "section_c": {
+          "type": "object",
+          "title": "Details of the installation",
+          "properties": {
+            "occupier": {"type": "string"},
+            "installation_address": {"type": "string"},
+            "type_of_installation": {"type": "string"},
+            "estimated_age": {"type": "string"}
+          }
+        },
+        "section_d": {
+          "type": "object",
+          "title": "Extent and limitations",
+          "properties": {
+            "extent_of_inspection": {"type": "string"},
+            "limitations": {"type": "array", "items": {"type": "string"}},
+            "percentage_inspected": {"type": "number", "minimum": 0, "maximum": 100}
+          }
+        },
+        "section_e": {
+          "type": "object",
+          "title": "Summary of the condition of the installation",
+          "properties": {
+            "general_condition": {"type": "string"},
+            "overall_assessment": {
+              "type": "string",
+              "enum": ["SATISFACTORY", "UNSATISFACTORY"],
+              "description": "HUMAN ASSERTION REQUIRED - no auto-assignment"
+            }
+          },
+          "required": ["overall_assessment"]
+        },
+        "section_f": {
+          "type": "object",
+          "title": "Recommendations",
+          "properties": {
+            "recommendations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "enum": ["C1", "C2", "C3", "FI"],
+                    "description": "HUMAN ASSERTION REQUIRED - no auto-assignment"
+                  },
+                  "description": {"type": "string"},
+                  "reference": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "section_g": {
+          "type": "object",
+          "title": "Declaration",
+          "properties": {
+            "inspector_name": {"type": "string"},
+            "inspector_position": {"type": "string"},
+            "date_of_inspection": {"type": "string", "format": "date"},
+            "signature": {"type": "string", "description": "Digital signature or name"},
+            "next_inspection_date": {"type": "string", "format": "date"}
+          },
+          "required": ["inspector_name", "date_of_inspection"]
+        },
+        "section_h": {
+          "type": "object",
+          "title": "Schedule of items inspected",
+          "properties": {
+            "inspection_schedule": {
+              "type": "object",
+              "description": "Reference to inspection schedule checklist"
+            }
+          }
+        },
+        "section_i": {
+          "type": "object",
+          "title": "Supply characteristics and earthing arrangements",
+          "properties": {
+            "supply_type": {"type": "string"},
+            "supply_parameters": {
+              "type": "object",
+              "properties": {
+                "voltage": {"type": "number"},
+                "frequency": {"type": "number"},
+                "prospective_fault_current": {"type": "number"},
+                "external_loop_impedance": {"type": "number"}
+              }
+            },
+            "earthing_arrangements": {"type": "string"}
+          }
+        },
+        "section_j": {
+          "type": "object",
+          "title": "Particulars of installation",
+          "properties": {
+            "means_of_earthing": {"type": "string"},
+            "main_protective_conductors": {"type": "string"},
+            "main_switch_rating": {"type": "number"},
+            "rcd_details": {"type": "string"}
+          }
+        },
+        "section_k": {
+          "type": "object",
+          "title": "Observations and recommendations",
+          "properties": {
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "item": {"type": "string", "description": "Reference number (e.g., 5.18)"},
+                  "description": {
+                    "type": "string",
+                    "description": "HUMAN WRITTEN ONLY - no AI generation"
+                  },
+                  "classification": {
+                    "type": "string",
+                    "enum": ["C1", "C2", "C3", "FI"],
+                    "description": "HUMAN ASSERTION REQUIRED"
+                  },
+                  "evidence_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {"type": "string"},
+                        "nice_ref": {"type": "string"},
+                        "description": {"type": "string"},
+                        "captured_at": {"type": "string", "format": "date-time"}
+                      }
+                    },
+                    "description": "Evidence REFERENCED not EMBEDDED"
+                  }
+                },
+                "required": ["item", "description", "classification"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "schedules": {
+      "type": "object",
+      "properties": {
+        "circuit_details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "circuit_designation": {"type": "string"},
+              "circuit_type": {"type": "string"},
+              "live_conductors": {"type": "string"},
+              "cpc_conductors": {"type": "string"},
+              "overcurrent_device": {"type": "string"},
+              "residual_current_device": {"type": "string"}
+            }
+          }
+        },
+        "test_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "circuit_designation": {"type": "string"},
+              "continuity": {"type": "number"},
+              "insulation_resistance": {"type": "number"},
+              "polarity": {"type": "string"},
+              "earth_fault_loop_impedance": {"type": "number"},
+              "rcd_test": {"type": "string"}
+            }
+          }
+        },
+        "inspection_schedule": {
+          "type": "object",
+          "description": "Checklist of items inspected per BS 7671",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "checked": {"type": "boolean"},
+              "na": {"type": "boolean"},
+              "lim": {"type": "boolean"},
+              "notes": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
+  }
+}
