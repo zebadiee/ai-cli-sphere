@@ -1,0 +1,321 @@
+/* EICR Form Styles */
+
+/* Page setup */
+@page {
+    size: A4 portrait;
+    margin: 20mm 15mm;
+    
+    @top-center {
+        content: "Electrical Installation Condition Report";
+        font-family: Arial, sans-serif;
+        font-size: 10pt;
+    }
+    
+    @bottom-center {
+        content: "Page " counter(page);
+        font-family: Arial, sans-serif;
+        font-size: 9pt;
+    }
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.4;
+    color: #000;
+}
+
+/* Page container */
+.page {
+    page-break-after: always;
+    position: relative;
+}
+
+.page:last-child {
+    page-break-after: avoid;
+}
+
+/* Header */
+.header {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #000;
+}
+
+.header h1 {
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.header-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9pt;
+}
+
+.header-info p {
+    margin: 2px 0;
+}
+
+.page-number {
+    float: right;
+    font-weight: bold;
+}
+
+/* Sections */
+.section {
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+}
+
+.section h2 {
+    font-size: 11pt;
+    font-weight: bold;
+    background-color: #e0e0e0;
+    padding: 5px 10px;
+    margin-bottom: 10px;
+    border: 1px solid #000;
+    text-transform: uppercase;
+}
+
+/* Form fields */
+.form-field {
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-field label {
+    font-weight: bold;
+    margin-bottom: 3px;
+    font-size: 9pt;
+}
+
+.field-value {
+    border-bottom: 1px solid #000;
+    min-height: 20px;
+    padding: 2px 5px;
+    font-size: 10pt;
+}
+
+.field-value.multiline {
+    min-height: 60px;
+    border: 1px solid #000;
+    padding: 5px;
+}
+
+.field-value.signature {
+    min-height: 40px;
+    font-style: italic;
+}
+
+.underline {
+    display: inline-block;
+    border-bottom: 1px solid #000;
+    min-width: 150px;
+}
+
+/* Form grid */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+/* Checkboxes and Radio buttons */
+.checkbox-group,
+.radio-group {
+    margin: 10px 0;
+}
+
+.checkbox-item,
+.radio-item {
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+}
+
+.checkbox,
+.radio {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #000;
+    margin-right: 8px;
+    text-align: center;
+    line-height: 12px;
+    font-size: 10pt;
+}
+
+.radio {
+    border-radius: 50%;
+}
+
+/* Tables */
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 9pt;
+}
+
+.schedule-table th,
+.schedule-table td {
+    border: 1px solid #000;
+    padding: 5px;
+    text-align: left;
+}
+
+.schedule-table th {
+    background-color: #e0e0e0;
+    font-weight: bold;
+    text-align: center;
+}
+
+.schedule-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Inspection Schedule */
+.inspection-schedule {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 8pt;
+}
+
+.inspection-schedule th,
+.inspection-schedule td {
+    border: 1px solid #000;
+    padding: 4px;
+    text-align: center;
+}
+
+.inspection-schedule th {
+    background-color: #d0d0d0;
+    font-weight: bold;
+}
+
+.inspection-schedule td:nth-child(2) {
+    text-align: left;
+    width: 50%;
+}
+
+.inspection-schedule .section-header {
+    background-color: #e8e8e8;
+    font-weight: bold;
+}
+
+.inspection-schedule .section-header td {
+    text-align: left;
+    padding: 6px 4px;
+}
+
+/* Observations and Recommendations */
+.observations,
+.recommendations {
+    margin: 10px 0;
+}
+
+.observation-item,
+.recommendation-item {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    page-break-inside: avoid;
+}
+
+.observation-item p,
+.recommendation-item p {
+    margin: 5px 0;
+}
+
+.evidence-refs {
+    margin-top: 10px;
+    padding: 8px;
+    background-color: #fff;
+    border-left: 3px solid #666;
+}
+
+.evidence-refs ul {
+    margin-left: 20px;
+    margin-top: 5px;
+}
+
+.evidence-refs li {
+    margin: 3px 0;
+    font-size: 9pt;
+}
+
+/* Notes */
+.note {
+    font-size: 9pt;
+    color: #555;
+    font-style: italic;
+    margin: 8px 0;
+}
+
+/* Declaration */
+.declaration-text {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border: 1px solid #ccc;
+    font-style: italic;
+}
+
+/* Footer */
+.footer {
+    margin-top: 30px;
+    text-align: center;
+    font-size: 9pt;
+    color: #666;
+    page-break-before: avoid;
+}
+
+/* Utilities */
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.font-bold {
+    font-weight: bold;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+/* Print-specific */
+@media print {
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .page {
+        page-break-after: always;
+    }
+    
+    .section {
+        page-break-inside: avoid;
+    }
+}

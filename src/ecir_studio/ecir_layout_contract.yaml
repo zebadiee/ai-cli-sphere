@@ -1,0 +1,211 @@
+---
+# EICR Layout Contract
+# Page truth - defines the visual structure of EICR forms
+
+document:
+  name: "Electrical Installation Condition Report"
+  standard: "BS 7671"
+  page_size: "A4"
+  orientation: "portrait"
+  margins:
+    top: 20mm
+    bottom: 20mm
+    left: 15mm
+    right: 15mm
+
+pages:
+  - page: 1
+    sections:
+      - section: header
+        content:
+          - report_number
+          - inspection_date
+          - page_number
+      - section: section_a
+        title: "Details of the person ordering the report"
+        fields:
+          - client_name
+          - client_address
+          - purpose_of_report
+      - section: section_b
+        title: "Reason for producing this report"
+        fields:
+          - reason_checkboxes
+          - other_reason_text
+      - section: section_c
+        title: "Details of the installation"
+        fields:
+          - occupier
+          - installation_address
+          - type_of_installation
+          - estimated_age
+
+  - page: 2
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: section_d
+        title: "Extent and limitations of the inspection"
+        fields:
+          - extent_of_inspection
+          - limitations_list
+          - percentage_inspected
+      - section: section_e
+        title: "Summary of the condition of the installation"
+        fields:
+          - general_condition_text
+          - overall_assessment_radio
+      - section: section_f
+        title: "Recommendations"
+        fields:
+          - recommendations_table
+
+  - page: 3
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: section_g
+        title: "Declaration"
+        fields:
+          - inspector_name
+          - inspector_position
+          - date_of_inspection
+          - signature
+          - next_inspection_date
+      - section: section_h
+        title: "Schedule of items inspected"
+        fields:
+          - inspection_schedule_reference
+
+  - page: 4
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: section_i
+        title: "Supply characteristics and earthing arrangements"
+        fields:
+          - supply_type
+          - voltage
+          - frequency
+          - prospective_fault_current
+          - external_loop_impedance
+          - earthing_arrangements
+      - section: section_j
+        title: "Particulars of the installation"
+        fields:
+          - means_of_earthing
+          - main_protective_conductors
+          - main_switch_rating
+          - rcd_details
+
+  - page: 5
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: section_k
+        title: "Observations and recommendations"
+        fields:
+          - observations_table
+
+  - page: 6
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: schedule_circuit_details
+        title: "Schedule of Circuit Details"
+        type: table
+        columns:
+          - circuit_designation
+          - circuit_type
+          - live_conductors
+          - cpc_conductors
+          - overcurrent_device
+          - residual_current_device
+
+  - page: 7
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: schedule_test_results
+        title: "Schedule of Test Results"
+        type: table
+        columns:
+          - circuit_designation
+          - continuity
+          - insulation_resistance
+          - polarity
+          - earth_fault_loop_impedance
+          - rcd_test
+
+  - page: 8-9
+    sections:
+      - section: header
+        content:
+          - report_number
+          - page_number
+      - section: inspection_schedule
+        title: "Condition Report Inspection Schedule"
+        type: checklist
+        items:
+          - "1.0 Earthing and bonding"
+          - "2.0 Parallel or switched alternative sources"
+          - "3.0 Auto disconnection of supply"
+          - "4.0 Basic protection"
+          - "5.0 Additional protection"
+          - "6.0 Other protection measures"
+          - "7.0 Prevention of mutual detrimental influence"
+          - "8.0 Identification"
+
+styling:
+  fonts:
+    body: "Arial, sans-serif"
+    headings: "Arial, bold"
+    size_body: "10pt"
+    size_heading: "12pt"
+  
+  colors:
+    header_bg: "#CCCCCC"
+    border: "#000000"
+    text: "#000000"
+  
+  tables:
+    border_width: "1px"
+    cell_padding: "4px"
+    header_bg: "#EEEEEE"
+  
+  checkboxes:
+    size: "12px"
+    style: "square"
+  
+  page_breaks:
+    before_sections: ["section_g", "section_i", "section_k", "schedule_circuit_details", "schedule_test_results", "inspection_schedule"]
+
+authority_boundaries:
+  no_auto_assign:
+    - "C1/C2/C3/FI codes"
+    - "SATISFACTORY/UNSATISFACTORY"
+  
+  no_auto_generate:
+    - "observations"
+    - "recommendations"
+  
+  human_required:
+    - "signature"
+    - "classification codes"
+    - "overall assessment"
+  
+  evidence:
+    mode: "reference_only"
+    embedding: "prohibited"
