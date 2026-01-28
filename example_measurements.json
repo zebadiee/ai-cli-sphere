@@ -1,0 +1,58 @@
+{
+  "supply": {
+    "measured_ze": 0.35,
+    "measured_ipf": 1.2,
+    "earthing_arrangement": "TN-S",
+    "number_of_live_conductors": "1-phase, 2-wire",
+    "nominal_voltage_u0": 230
+  },
+  "client": {
+    "name": "John Smith",
+    "address_line_1": "123 Example Street",
+    "city": "London",
+    "postcode": "SW1A 1AA"
+  },
+  "installation": {
+    "occupier": "John Smith",
+    "installation_address": "123 Example Street, London, SW1A 1AA",
+    "description": "Domestic dwelling"
+  },
+  "circuits": [
+    {
+      "circuit_number": 1,
+      "description": "Lighting - Ground Floor",
+      "device_standard": "BS EN 60898",
+      "device_type": "B",
+      "rating": 6,
+      "cable_type": "thermoplastic_70c",
+      "cable_csa": 1.5,
+      "cable_cpc_csa": 1.5,
+      "cable_reference_method": "C",
+      "measured_zs": 0.89,
+      "measured_r1r2": 0.45,
+      "insulation_resistance": 250.0,
+      "polarity": "Pass",
+      "design_current": 5,
+      "cable_length": 15,
+      "circuit_type": "lighting"
+    },
+    {
+      "circuit_number": 2,
+      "description": "Socket Outlets - Ground Floor",
+      "device_standard": "BS EN 60898",
+      "device_type": "B",
+      "rating": 32,
+      "cable_type": "thermoplastic_70c",
+      "cable_csa": 4.0,
+      "cable_cpc_csa": 2.5,
+      "cable_reference_method": "C",
+      "measured_zs": 0.72,
+      "measured_r1r2": 0.38,
+      "insulation_resistance": 300.0,
+      "polarity": "Pass",
+      "design_current": 20,
+      "cable_length": 12,
+      "circuit_type": "power"
+    }
+  ]
+}

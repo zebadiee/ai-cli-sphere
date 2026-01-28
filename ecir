@@ -1,0 +1,12 @@
+#!/bin/bash
+# EICR CLI Wrapper Script
+# Makes it easier to run the EICR CLI without setting PYTHONPATH
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Set PYTHONPATH to the repository root
+export PYTHONPATH="$SCRIPT_DIR"
+
+# Run the CLI with all arguments passed through
+python "$SCRIPT_DIR/src/cli.py" "$@"

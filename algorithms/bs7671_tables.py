@@ -72,6 +72,10 @@ class BS7671Tables:
             device_standard = device_standard.lower().replace(" ", "_").replace("-", "_")
             device_type = device_type.lower().replace(" ", "_").replace("-", "_")
             
+            # Add "type_" prefix if not already present and not "gg"
+            if not device_type.startswith("type_") and device_type not in ["gg", "type_1", "type_2"]:
+                device_type = f"type_{device_type}"
+            
             # Convert rating to string for JSON lookup
             rating_str = str(int(rating))
             
