@@ -1,0 +1,380 @@
+description: "Complete EICR (Electrical Installation Condition Report) Template based on BS 7671:2018+A2:2022"
+version: "1.0"
+
+sections:
+  section_a_client_details:
+    title: "Details of Person Ordering Report"
+    fields:
+      name:
+        type: text
+        label: "Name"
+        required: true
+      address_line_1:
+        type: text
+        label: "Address Line 1"
+        required: true
+      address_line_2:
+        type: text
+        label: "Address Line 2"
+        required: false
+      city:
+        type: text
+        label: "City"
+        required: true
+      postcode:
+        type: text
+        label: "Postcode"
+        required: true
+        validation: "^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$"
+      telephone:
+        type: text
+        label: "Telephone"
+        required: false
+
+  section_b_installation_details:
+    title: "Details of the Installation"
+    fields:
+      occupier:
+        type: text
+        label: "Occupier"
+        required: true
+      installation_address:
+        type: text
+        label: "Installation Address"
+        required: true
+      description:
+        type: text
+        label: "Description of Premises"
+        required: true
+      estimated_age:
+        type: number
+        label: "Estimated Age (years)"
+        unit: "years"
+        required: false
+      evidence_of_alterations:
+        type: boolean
+        label: "Evidence of Alterations or Additions"
+        required: true
+      date_of_last_inspection:
+        type: date
+        label: "Date of Last Inspection"
+        required: false
+
+  section_c_extent_of_inspection:
+    title: "Extent and Limitations of Inspection"
+    fields:
+      extent_of_electrical_installation:
+        type: text
+        label: "Extent of Electrical Installation Covered"
+        required: true
+      limitations:
+        type: text
+        label: "Limitations"
+        required: false
+      agreed_with_client:
+        type: boolean
+        label: "Agreed with Client"
+        required: true
+
+  section_d_summary:
+    title: "Summary of the Inspection"
+    fields:
+      date_of_inspection:
+        type: date
+        label: "Date(s) of Inspection"
+        required: true
+      overall_assessment:
+        type: dropdown
+        label: "Overall Assessment"
+        options:
+          - "Satisfactory"
+          - "Unsatisfactory"
+        required: true
+      recommendation_code:
+        type: dropdown
+        label: "Recommendation Code"
+        options:
+          - "C1 - Danger present, risk of injury"
+          - "C2 - Potentially dangerous, urgent remedial action required"
+          - "C3 - Improvement recommended"
+          - "FI - Further investigation required"
+        required: false
+
+  section_e_supply_characteristics:
+    title: "Supply Characteristics and Earthing Arrangements"
+    fields:
+      earthing_arrangement:
+        type: dropdown
+        label: "Earthing Arrangement"
+        options:
+          - "TN-C"
+          - "TN-S"
+          - "TN-C-S"
+          - "TT"
+          - "IT"
+        required: true
+      number_of_live_conductors:
+        type: dropdown
+        label: "Number of Live Conductors"
+        options:
+          - "1-phase, 2-wire"
+          - "1-phase, 3-wire"
+          - "2-phase, 3-wire"
+          - "3-phase, 3-wire"
+          - "3-phase, 4-wire"
+        required: true
+      nominal_voltage_u0:
+        type: number
+        label: "Nominal Voltage U0 (V)"
+        unit: "V"
+        default: 230
+        required: true
+      nominal_voltage_u:
+        type: number
+        label: "Nominal Voltage U (V)"
+        unit: "V"
+        default: 400
+        required: false
+      nominal_frequency:
+        type: number
+        label: "Nominal Frequency (Hz)"
+        unit: "Hz"
+        default: 50
+        required: true
+      prospective_fault_current:
+        type: number
+        label: "Prospective Fault Current (kA)"
+        unit: "kA"
+        calculable: true
+        algorithm: "calculate_ipf"
+        required: true
+      external_loop_impedance:
+        type: number
+        label: "External Loop Impedance Ze (Ω)"
+        unit: "Ω"
+        calculable: true
+        algorithm: "calculate_ze"
+        required: true
+
+  section_f_particulars_of_installation:
+    title: "Particulars of Installation at the Origin"
+    fields:
+      means_of_earthing:
+        type: dropdown
+        label: "Means of Earthing"
+        options:
+          - "Supplier's facility"
+          - "Installation earth electrode"
+        required: true
+      main_protective_conductor:
+        type: dropdown
+        label: "Main Protective Conductor"
+        options:
+          - "Copper"
+          - "Aluminum"
+          - "Steel"
+        required: true
+      main_protective_conductor_csa:
+        type: number
+        label: "Main Protective Conductor CSA (mm²)"
+        unit: "mm²"
+        required: true
+      main_switch_type:
+        type: dropdown
+        label: "Main Switch/Circuit Breaker Type"
+        options:
+          - "BS EN 60947-2"
+          - "BS EN 60947-3"
+          - "BS 88-3"
+          - "Other"
+        required: true
+      main_switch_rating:
+        type: number
+        label: "Main Switch Rating (A)"
+        unit: "A"
+        required: true
+      rcd_operation:
+        type: dropdown
+        label: "RCD Operation"
+        options:
+          - "None fitted"
+          - "30mA"
+          - "100mA"
+          - "300mA"
+        required: false
+
+  section_g_observations:
+    title: "Observations and Recommendations"
+    fields:
+      observations:
+        type: table
+        label: "Observations"
+        columns:
+          - name: "item"
+            type: "number"
+            label: "Item"
+          - name: "reference"
+            type: "text"
+            label: "Reference/Location"
+          - name: "code"
+            type: "dropdown"
+            label: "Code"
+            options:
+              - "C1"
+              - "C2"
+              - "C3"
+              - "FI"
+          - name: "observation"
+            type: "text"
+            label: "Observation"
+        required: false
+
+  section_h_circuit_details:
+    title: "Schedule of Circuit Details and Test Results"
+    fields:
+      circuits:
+        type: table
+        label: "Circuits"
+        columns:
+          - name: "circuit_number"
+            type: "number"
+            label: "Circuit No."
+          - name: "circuit_description"
+            type: "text"
+            label: "Circuit Description"
+          - name: "type_bs_standard"
+            type: "dropdown"
+            label: "Type/BS Standard"
+            options:
+              - "BS EN 60898"
+              - "BS EN 61009"
+              - "BS 88-3"
+              - "BS 1361"
+          - name: "type"
+            type: "dropdown"
+            label: "Type"
+            options:
+              - "B"
+              - "C"
+              - "D"
+              - "gG"
+          - name: "rating"
+            type: "number"
+            label: "Rating (A)"
+            unit: "A"
+          - name: "cable_type"
+            type: "dropdown"
+            label: "Cable Type"
+            options:
+              - "Thermoplastic 70°C"
+              - "Thermosetting 90°C"
+          - name: "cable_reference_method"
+            type: "dropdown"
+            label: "Reference Method"
+            options:
+              - "A"
+              - "B"
+              - "C"
+              - "D"
+          - name: "cable_csa"
+            type: "number"
+            label: "Live Conductor CSA (mm²)"
+            unit: "mm²"
+          - name: "cable_cpc_csa"
+            type: "number"
+            label: "CPC CSA (mm²)"
+            unit: "mm²"
+          - name: "max_zs"
+            type: "number"
+            label: "Max Zs (Ω)"
+            unit: "Ω"
+            calculable: true
+            algorithm: "calculate_max_zs"
+          - name: "measured_zs"
+            type: "number"
+            label: "Measured Zs (Ω)"
+            unit: "Ω"
+          - name: "measured_r1r2"
+            type: "number"
+            label: "Measured R1+R2 (Ω)"
+            unit: "Ω"
+          - name: "insulation_resistance"
+            type: "number"
+            label: "Insulation Resistance (MΩ)"
+            unit: "MΩ"
+          - name: "polarity"
+            type: "dropdown"
+            label: "Polarity"
+            options:
+              - "Pass"
+              - "Fail"
+          - name: "rcd_test"
+            type: "number"
+            label: "RCD Test (ms)"
+            unit: "ms"
+          - name: "result"
+            type: "dropdown"
+            label: "Result"
+            options:
+              - "Pass"
+              - "Fail"
+              - "N/A"
+        required: true
+
+  section_i_inspector_details:
+    title: "Details of Inspector"
+    fields:
+      inspector_name:
+        type: text
+        label: "Name"
+        required: true
+      inspector_company:
+        type: text
+        label: "Company/Trading Name"
+        required: true
+      inspector_address:
+        type: text
+        label: "Address"
+        required: true
+      inspector_postcode:
+        type: text
+        label: "Postcode"
+        required: true
+      inspector_telephone:
+        type: text
+        label: "Telephone"
+        required: false
+      inspector_email:
+        type: text
+        label: "Email"
+        required: false
+        validation: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      inspector_signature:
+        type: text
+        label: "Signature"
+        required: true
+      inspector_date:
+        type: date
+        label: "Date"
+        required: true
+      inspector_qualifications:
+        type: text
+        label: "Qualifications"
+        required: true
+
+  section_j_next_inspection:
+    title: "Recommendation for Next Inspection"
+    fields:
+      next_inspection_date:
+        type: date
+        label: "Recommended Date for Next Inspection"
+        required: true
+      next_inspection_interval:
+        type: dropdown
+        label: "Recommended Inspection Interval"
+        options:
+          - "1 year"
+          - "3 years"
+          - "5 years"
+          - "10 years"
+        required: true

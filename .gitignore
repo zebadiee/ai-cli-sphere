@@ -25,6 +25,11 @@ build/
 *_config.json
 *.backup
 
+# EICR drafts and generated files
+.eicr_drafts/
+*.eicr.json
+*.eicr.pdf
+
 # IDE
 .vscode/
 .idea/

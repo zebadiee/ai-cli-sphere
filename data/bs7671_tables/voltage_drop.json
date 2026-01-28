@@ -1,0 +1,145 @@
+{
+  "description": "Voltage drop values from BS 7671:2018+A2:2022 Appendix 4 (mV/A/m)",
+  "thermoplastic_copper": {
+    "description": "Thermoplastic insulated copper conductors",
+    "1.0": {
+      "ac_single_phase": 44,
+      "ac_three_phase": 38
+    },
+    "1.5": {
+      "ac_single_phase": 29,
+      "ac_three_phase": 25
+    },
+    "2.5": {
+      "ac_single_phase": 18,
+      "ac_three_phase": 15
+    },
+    "4.0": {
+      "ac_single_phase": 11,
+      "ac_three_phase": 9.5
+    },
+    "6.0": {
+      "ac_single_phase": 7.3,
+      "ac_three_phase": 6.4
+    },
+    "10.0": {
+      "ac_single_phase": 4.4,
+      "ac_three_phase": 3.8
+    },
+    "16.0": {
+      "ac_single_phase": 2.8,
+      "ac_three_phase": 2.4
+    },
+    "25.0": {
+      "ac_single_phase": 1.75,
+      "ac_three_phase": 1.50
+    },
+    "35.0": {
+      "ac_single_phase": 1.25,
+      "ac_three_phase": 1.10
+    },
+    "50.0": {
+      "ac_single_phase": 0.93,
+      "ac_three_phase": 0.80
+    },
+    "70.0": {
+      "ac_single_phase": 0.65,
+      "ac_three_phase": 0.56
+    },
+    "95.0": {
+      "ac_single_phase": 0.50,
+      "ac_three_phase": 0.43
+    },
+    "120.0": {
+      "ac_single_phase": 0.40,
+      "ac_three_phase": 0.34
+    },
+    "150.0": {
+      "ac_single_phase": 0.32,
+      "ac_three_phase": 0.27
+    },
+    "185.0": {
+      "ac_single_phase": 0.27,
+      "ac_three_phase": 0.23
+    },
+    "240.0": {
+      "ac_single_phase": 0.21,
+      "ac_three_phase": 0.18
+    },
+    "300.0": {
+      "ac_single_phase": 0.17,
+      "ac_three_phase": 0.15
+    }
+  },
+  "thermosetting_copper": {
+    "description": "Thermosetting insulated copper conductors",
+    "1.0": {
+      "ac_single_phase": 44,
+      "ac_three_phase": 38
+    },
+    "1.5": {
+      "ac_single_phase": 29,
+      "ac_three_phase": 25
+    },
+    "2.5": {
+      "ac_single_phase": 18,
+      "ac_three_phase": 15
+    },
+    "4.0": {
+      "ac_single_phase": 11,
+      "ac_three_phase": 9.5
+    },
+    "6.0": {
+      "ac_single_phase": 7.3,
+      "ac_three_phase": 6.4
+    },
+    "10.0": {
+      "ac_single_phase": 4.4,
+      "ac_three_phase": 3.8
+    },
+    "16.0": {
+      "ac_single_phase": 2.8,
+      "ac_three_phase": 2.4
+    },
+    "25.0": {
+      "ac_single_phase": 1.75,
+      "ac_three_phase": 1.50
+    },
+    "35.0": {
+      "ac_single_phase": 1.25,
+      "ac_three_phase": 1.10
+    },
+    "50.0": {
+      "ac_single_phase": 0.93,
+      "ac_three_phase": 0.80
+    },
+    "70.0": {
+      "ac_single_phase": 0.65,
+      "ac_three_phase": 0.56
+    },
+    "95.0": {
+      "ac_single_phase": 0.50,
+      "ac_three_phase": 0.43
+    },
+    "120.0": {
+      "ac_single_phase": 0.40,
+      "ac_three_phase": 0.34
+    },
+    "150.0": {
+      "ac_single_phase": 0.32,
+      "ac_three_phase": 0.27
+    },
+    "185.0": {
+      "ac_single_phase": 0.27,
+      "ac_three_phase": 0.23
+    },
+    "240.0": {
+      "ac_single_phase": 0.21,
+      "ac_three_phase": 0.18
+    },
+    "300.0": {
+      "ac_single_phase": 0.17,
+      "ac_three_phase": 0.15
+    }
+  }
+}
