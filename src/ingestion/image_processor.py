@@ -199,12 +199,12 @@ class ImageProcessor:
                 if isinstance(value, bytes):
                     try:
                         value = value.decode('utf-8')
-                    except:
+                    except (UnicodeDecodeError, AttributeError):
                         value = str(value)
                 exif_data[tag] = value
             
             return exif_data
-        except:
+        except (AttributeError, KeyError, TypeError):
             return None
     
     def _create_thumbnail(self, img: Image.Image) -> bytes:

@@ -276,7 +276,6 @@ class EvidenceIngestionPipeline:
     
     def _generate_evidence_id(self) -> str:
         """Generate a unique evidence ID."""
-        from datetime import datetime
         import uuid
         
         timestamp = datetime.utcnow().strftime("%Y%m%d")
@@ -286,7 +285,6 @@ class EvidenceIngestionPipeline:
     
     def _generate_batch_id(self) -> str:
         """Generate a unique batch ID."""
-        from datetime import datetime
         import uuid
         
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")

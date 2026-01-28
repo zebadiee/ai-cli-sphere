@@ -12,6 +12,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+try:
+    from shutil import copy2
+    SHUTIL_AVAILABLE = True
+except ImportError:
+    SHUTIL_AVAILABLE = False
+
 
 class NICEAdapter:
     """
@@ -115,7 +121,8 @@ class NICEAdapter:
         
         # If image_path provided, copy to mock storage
         if image_path:
-            from shutil import copy2
+            if not SHUTIL_AVAILABLE:
+                raise ImportError("shutil module required for file operations")
             dest_path = self.mock_storage_path / f"{nice_ref}.jpg"
             copy2(image_path, dest_path)
             mock_record["storage_path"] = str(dest_path)

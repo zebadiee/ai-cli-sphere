@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Union
+from html import escape
 
 from weasyprint import HTML, CSS
 
@@ -186,9 +187,9 @@ class ECIRPDFRenderer:
         replacements["{{signature}}"] = section_g.get("signature", "")
         replacements["{{next_inspection_date}}"] = section_g.get("next_inspection_date", "")
         
-        # Apply all replacements
+        # Apply all replacements (with HTML escaping for security)
         for placeholder, value in replacements.items():
-            html = html.replace(placeholder, str(value))
+            html = html.replace(placeholder, escape(str(value)))
         
         # Handle arrays (observations, recommendations, etc.)
         html = self._populate_observations(html, data)
@@ -198,7 +199,7 @@ class ECIRPDFRenderer:
         return html
     
     def _populate_observations(self, html: str, data: Dict) -> str:
-        """Populate observations section."""
+        """Populate observations section (with HTML escaping for security)."""
         section_k = data.get("sections", {}).get("section_k", {})
         observations = section_k.get("observations", [])
         
@@ -211,13 +212,22 @@ class ECIRPDFRenderer:
             if obs.get("evidence_refs"):
                 evidence_html = "<div class='evidence-refs'><strong>Evidence:</strong><ul>"
                 for ev in obs["evidence_refs"]:
-                    evidence_html += f"<li>{ev.get('id', '')} (NICE: {ev.get('nice_ref', '')}) - {ev.get('description', '')}</li>"
+                    # Escape all user-provided data to prevent HTML injection
+                    ev_id = escape(ev.get('id', ''))
+                    nice_ref = escape(ev.get('nice_ref', ''))
+                    description = escape(ev.get('description', ''))
+                    evidence_html += f"<li>{ev_id} (NICE: {nice_ref}) - {description}</li>"
                 evidence_html += "</ul></div>"
+            
+            # Escape all user-provided data
+            item = escape(obs.get('item', ''))
+            description = escape(obs.get('description', ''))
+            classification = escape(obs.get('classification', ''))
             
             obs_html += f"""
             <div class="observation-item">
-                <p><strong>Item {obs.get('item', '')}:</strong> {obs.get('description', '')}</p>
-                <p><strong>Classification:</strong> {obs.get('classification', '')}</p>
+                <p><strong>Item {item}:</strong> {description}</p>
+                <p><strong>Classification:</strong> {classification}</p>
                 {evidence_html}
             </div>
             """
@@ -226,7 +236,7 @@ class ECIRPDFRenderer:
         return html
     
     def _populate_recommendations(self, html: str, data: Dict) -> str:
-        """Populate recommendations section."""
+        """Populate recommendations section (with HTML escaping for security)."""
         section_f = data.get("sections", {}).get("section_f", {})
         recommendations = section_f.get("recommendations", [])
         
@@ -235,9 +245,14 @@ class ECIRPDFRenderer:
         
         rec_html = ""
         for rec in recommendations:
+            # Escape all user-provided data
+            code = escape(rec.get('code', ''))
+            description = escape(rec.get('description', ''))
+            reference = escape(rec.get('reference', ''))
+            
             rec_html += f"""
             <div class="recommendation-item">
-                <p><strong>{rec.get('code', '')}:</strong> {rec.get('description', '')} (Ref: {rec.get('reference', '')})</p>
+                <p><strong>{code}:</strong> {description} (Ref: {reference})</p>
             </div>
             """
         
@@ -245,7 +260,7 @@ class ECIRPDFRenderer:
         return html
     
     def _populate_schedules(self, html: str, data: Dict) -> str:
-        """Populate schedule tables."""
+        """Populate schedule tables (with HTML escaping for security)."""
         schedules = data.get("schedules", {})
         
         # Circuit details
@@ -255,13 +270,14 @@ class ECIRPDFRenderer:
             circuit_html += "<th>Circuit</th><th>Type</th><th>Live</th><th>CPC</th><th>Overcurrent</th><th>RCD</th>"
             circuit_html += "</tr></thead><tbody>"
             for circuit in circuit_details:
+                # Escape all user-provided data
                 circuit_html += "<tr>"
-                circuit_html += f"<td>{circuit.get('circuit_designation', '')}</td>"
-                circuit_html += f"<td>{circuit.get('circuit_type', '')}</td>"
-                circuit_html += f"<td>{circuit.get('live_conductors', '')}</td>"
-                circuit_html += f"<td>{circuit.get('cpc_conductors', '')}</td>"
-                circuit_html += f"<td>{circuit.get('overcurrent_device', '')}</td>"
-                circuit_html += f"<td>{circuit.get('residual_current_device', '')}</td>"
+                circuit_html += f"<td>{escape(circuit.get('circuit_designation', ''))}</td>"
+                circuit_html += f"<td>{escape(circuit.get('circuit_type', ''))}</td>"
+                circuit_html += f"<td>{escape(circuit.get('live_conductors', ''))}</td>"
+                circuit_html += f"<td>{escape(circuit.get('cpc_conductors', ''))}</td>"
+                circuit_html += f"<td>{escape(circuit.get('overcurrent_device', ''))}</td>"
+                circuit_html += f"<td>{escape(circuit.get('residual_current_device', ''))}</td>"
                 circuit_html += "</tr>"
             circuit_html += "</tbody></table>"
             html = html.replace("{{circuit_details_table}}", circuit_html)
