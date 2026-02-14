@@ -1,0 +1,31 @@
+name: Integration Tests (Governance Enforced)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [ main, master ]
+
+jobs:
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    env:
+      GATEWAY_URL: http://localhost:9001
+      CT_TEST_KEY: ${{ secrets.CT_TEST_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU and Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run integration tests
+        run: |
+          chmod +x ./scripts/ci/run_integration_tests.sh
+          export CT_API_KEY="$CT_TEST_KEY"
+          ./scripts/ci/run_integration_tests.sh
+        timeout-minutes: 30
+
+    # Mark this job as required in branch protection
+    # Administrators should set branch protection to require this workflow to pass before merge.
